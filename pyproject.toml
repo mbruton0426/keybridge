@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "keybridge"
+version = "1.0.0"
+description = "Shared-space neural decipherment of historical simple and homophonic substitution ciphers"
+readme = "README.md"
+license = {text = "MIT"}  # code; models, keys, language profiles and docs: CC BY 4.0
+authors = [{name = "Micaella Bruton"}, {name = "Meriem Beloucif"}, {name = "Beáta Megyesi"}]
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.1",
+    "scikit-learn>=1.0",
+    "huggingface_hub>=0.20",
+    "datasets>=2.14",
+    "optuna>=3.0",
+]
+
+[project.optional-dependencies]
+search = []  # kept so older install commands still work; optuna is now always installed
+
+[project.scripts]
+keybridge = "keybridge.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/mbruton0426/keybridge"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+keybridge = ["language_profiles/*.json.gz"]

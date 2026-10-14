@@ -1,0 +1,31 @@
+# GitHub shows a "Cite this repository" button based on this file.
+# PLACEHOLDER: fill in the publication details once the paper is published (see docs/MAINTAINER_SETUP.md).
+cff-version: 1.2.0
+message: "If you use this software, its models or keys, please cite the paper below."
+title: "keybridge: neural decipherment of historical simple and homophonic substitution ciphers"
+type: software
+authors:
+  - family-names: Bruton
+    given-names: Micaella
+    affiliation: Stockholm University
+  - family-names: Beloucif
+    given-names: Meriem
+    affiliation: Uppsala University
+  - family-names: Megyesi
+    given-names: Beáta
+    affiliation: Stockholm University
+version: 1.0.0
+license: MIT
+repository-code: "https://github.com/mbruton0426/keybridge"
+preferred-citation:
+  type: article
+  title: "PLACEHOLDER: paper title"
+  authors:
+    - family-names: Bruton
+      given-names: Micaella
+    - family-names: Beloucif
+      given-names: Meriem
+    - family-names: Megyesi
+      given-names: Beáta
+  journal: Cryptologia
+  year: 2027

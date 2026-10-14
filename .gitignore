@@ -1,0 +1,18 @@
+# Python build and cache files
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+.ipynb_checkpoints/
+
+# Outputs of the tool (models, readings, scans) - keep them out of the code repository
+outputs/
+*.pt
+*_standard.txt
+wandb/
+
+# Secrets and local settings
+.env
+*.token
+.DS_Store

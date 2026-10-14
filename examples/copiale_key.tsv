@@ -1,0 +1,54 @@
+# Copiale cipher key (DECODE ID 2). Transcription format: symbols separated by spaces.
+# eM and eN share the symbol "uu" in the original key; only EN is listed here.
+plaintext	ciphertext	whole_word
+<SPACE>	"a"	"b"	"c"	"ds"	"e"	"f"	"ft"	"gs"	"h"	"i"	"k"	"l"	"m"	"n"	"o"	"p"	"q"	"r"	"s"	"longs"	"t"	"u"	"v"	"w"	"x"	"y"	"zs"
+"A"	"p."	"n."	"h."
+"Ä"	"fem"
+"B"	"sqp"
+"C"	"bas"
+"CH"	"arr"
+"D"	"pi"	"z"
+"E"	"ah"	"eh"	"ih"	"oh"	"uh"	"grr"	"zzz"
+"EN"	"uu"
+"F"	"sqi"
+"G"	"del"	"x."
+"H"	"hd"
+"I"	"y.."	"ns"	"iot"
+"J"	"car"
+"K"	"gam"
+"L"	"c."
+"M"	"plus"
+"N"	"mu"	"ru"	"nu"	"g"
+"O"	"tri"	"o."
+"Ö"	"no"
+"P"	"d"
+"Q"	"qua"
+"R"	"r."	"three"	"j"
+"S"	"bar"
+"SCH"	"cross"
+"SS"	"grc"
+"ST"	"hk"
+"T"	"lam"
+"U"	"ki"	"ni"
+"Ü"	"grl"
+"V"	"mal"
+"W"	"m."
+"X"	"pipe"
+"Y"	"inf"
+"Z"	"s."
+<DOUBLE>	":"
+"MASTER"	"nee"	yes
+"LODGE"	"tri.."	yes
+"SOCIETY"	"o.."	yes
+"OCULIST"	"lip"	yes
+"SECRET"	"star"	yes
+"FREEMASON"	"bigx"	yes
+"TABLE"	"gate"	yes
+"POWER"	"toe"	yes
+"POSITION OF FEET"	"bigl"	yes
+"GOD"	"sci"	yes
+"?"	"tribig"
+":)"	"smir"
+"(:"	"smil"
+"."	"."
+"…"	"…"
