@@ -27,6 +27,7 @@ The transcription must follow the **[transcription format](TRANSCRIPTION_FORMAT.
 | Skip lines starting with | Lines to ignore (default `##`; a single `#` is not skipped, since `#` can be a cipher symbol). Several markers can be given, separated by commas. |
 | Which models | All shared models; only those whose symbols are digit codes, single characters, or named symbols; specific models by ID; or only your own files. |
 | Model IDs | For "Specific shared models": IDs as listed in the collection, comma-separated. |
+| Use spaces as code boundaries | Only affects digit models. By default the transcription is read digit by digit and spaces are ignored, so running digits work. Tick this if your transcription separates the codes as the manuscript does ([Digit ciphers](TRANSCRIPTION_FORMAT.md#digit-ciphers-running-digits)). |
 | Use my own model files | Also test `.pt` files made with notebook ①. |
 | Languages | Limit the language comparison to some languages, e.g. `de, la, it`. Empty means all available. |
 | Close margin | Models scoring within this margin of the best are all treated as top results (default 0.05). |
@@ -42,7 +43,7 @@ For every model tested, four figures are calculated:
 
 | Figure | Meaning |
 |--------|---------|
-| **Symbols in key** (coverage) | The share of your transcription's symbols that exist in the model's key. This is checked before anything is downloaded; models below the minimum are skipped. |
+| **Symbols in key** (coverage) | The share of your transcription's symbols that exist in the model's key. This is checked before anything is downloaded; models below the minimum are skipped. For digit models, it is the share of your digits (with their marks) that the key uses. |
 | **Fit** (0–1) | How sure the model is about your text, compared with two references stored with the model: its certainty on text in its own key (1) and on text in scrambled keys (0). Symbols not in the key, and symbols of key units the model never saw in training, are left out. |
 | **Reads like** (plausibility, 0–1) | How much the decoded output resembles real text in each available language, based on letter-triple statistics from historical corpora. About 1 means it reads like real text in that language; about 0, like random letters. The best language is shown. |
 | **Score** | coverage × the average of fit and plausibility. Used for the ranking. |

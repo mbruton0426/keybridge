@@ -7,9 +7,8 @@ The notebooks and the command-line tool use the same code and give the same resu
 You need **Python 3.9 or newer** ([python.org](https://www.python.org/downloads/)). Then, in a terminal (Command Prompt on Windows):
 
 ```
-pip install git+https://github.com/mbruton0426/keybridge.git
+pip install keybridge
 ```
-
 
 This also installs PyTorch, which is a large download (around 1–3 GB depending on your system). Check that the install worked:
 
@@ -17,7 +16,7 @@ This also installs PyTorch, which is a large download (around 1–3 GB depending
 keybridge --version
 ```
 
-If you prefer not to use `git`, download the repository as a zip from GitHub, unpack it, and run `pip install .` inside the unpacked folder.
+To install the latest development version from GitHub instead, use `pip install git+https://github.com/mbruton0426/keybridge.git`, or download the repository as a zip, unpack it, and run `pip install .` inside the unpacked folder.
 
 A GPU is not required. Reading and scanning are fast on any computer. Training is much slower without a GPU, especially with the default 5,000 examples and the model-settings search, so use the Colab notebook for training if you can.
 
@@ -46,6 +45,7 @@ Useful options, matching the notebook settings ([TRAINING_GUIDE.md](TRAINING_GUI
 | `--null-rate 0.05`, `--double-rate 0.5`, `--rare-rate 0.02` | Null / double / rare unit rates (defaults shown; `--rare-rate 0` turns rare-unit insertion off) |
 | `--search-trials 20` | Short trials of the model-settings search (default 20; `0` skips the search and uses the fixed default settings) |
 | `--language Swedish` | Built-in plaintext language when `--plaintext` is not given (default English; also Czech, Dutch, French, Hungarian, Icelandic, Italian, Polish, Spanish) |
+| `--digit-mode auto` | Digit mode: `auto` (default; digit keys are read digit by digit), `on` or `off`. See [Digit ciphers](TRANSCRIPTION_FORMAT.md#digit-ciphers-running-digits). |
 | `--transcription letter.txt` | Also read a transcription after training |
 | `--custom-edits my_edits.py` | Custom edits (see below) |
 
@@ -56,6 +56,8 @@ keybridge read --model outputs/my_cipher/my_cipher_model.pt --transcription lett
 ```
 
 `--model` also accepts the ID of a model in the shared collection. The transcription format defaults to the model's own.
+
+For digit models, the transcription is read digit by digit and spaces are ignored; add `--use-separators` to treat spaces as code boundaries (also available for `scan` and `train --transcription`).
 
 ### Test a transcription against many models
 
@@ -86,6 +88,8 @@ For checking a model on an authentic ciphertext whose key is known, as in the pa
 - the units with the most errors, and what they were read as.
 
 It writes a `.json` and `.txt` summary, a per-unit table and a per-line table.
+
+**Digit models.** Give a transcription with the **codes separated by spaces**, as in an archive decryption (e.g. `12^. 1 5 62^. 71 00`). The reference is the key's reading of each code; the model reads the same digits with the spaces removed, so it has to find the codes itself. Two readings are scored, per digit (a code's first digit carries the unit, the others the label `<JOIN>`): *model* (the model's own labels) and *model + key* (the split into key codes that the model finds most likely, which is what keybridge outputs). Besides F1 and accuracy, the command reports split accuracy, the share of codes read fully right, accuracy on "hard spots" (digits where a code could also be read as shorter codes), and the character error rate of the reading. Codes that are not in the key (e.g. `?`) are not scored. It also writes a per-digit table.
 
 | Option | Meaning |
 |--------|---------|

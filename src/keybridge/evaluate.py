@@ -259,3 +259,218 @@ def write_reference_check(out_dir, name, summary, rows):
             w.writerow([r["line"], r["reference"], r["key_decoded"], r["model"], r["key_written"],
                         r["key_letters"], r["model_written"], r["model_letters"]])
     return [jpath, cpath]
+
+
+# -----------------------------------------------------------------------------
+# Digit models (see digits.py)
+# -----------------------------------------------------------------------------
+def evaluate_digits(model, checkpoint, numbered_lines, gold_key=None, exclude_units=(), bootstrap=1000,
+                    seed=0, log=print):
+    """Scores a digit model. The transcription must have the codes separated by spaces (e.g. from an
+    archive decryption); the reference for each code is the unit the key gives it. The model reads
+    the same digits with the spaces removed, so it has to find the codes itself.
+
+    Two readings are scored, per digit (a code's first digit carries its unit, the others <JOIN>):
+      model        the model's own label for each digit;
+      model + key  the split into key codes the model finds most likely (what keybridge outputs).
+    Codes that are not in the key (illegible signs, '?', ...) have no reference and are not scored."""
+    from .common import JOIN_UNIT
+    from .data import readable
+    from .digits import ambiguous_codes, info_of, piece_regex, read_stream, tokenize_symbols
+    info = info_of(checkpoint)
+    key = gold_key or CipherKey.from_json(checkpoint["key"])
+    excluded = set(exclude_units)
+    rx = piece_regex(info["marks"])
+
+    pieces, line_of, gold, scored, gold_code, code_id = [], [], [], [], [], []
+    gold_codes = []                     # (start, end, code, unit or None, line index)
+    for li, (no, items) in enumerate(numbered_lines):
+        for item in items:
+            ps = [p for p, _ in tokenize_symbols([item], rx)]
+            unit = key.symbol_to_unit.get(item)
+            ok = unit is not None and unit not in excluded
+            start = len(pieces)
+            for k, p in enumerate(ps):
+                pieces.append(p)
+                line_of.append(li)
+                gold.append((unit if k == 0 else JOIN_UNIT) if unit is not None else UNK)
+                scored.append(ok)
+                gold_code.append(item)
+                code_id.append(len(gold_codes))
+            gold_codes.append((start, len(pieces), item, unit, li, ok))
+    res = read_stream(model, checkpoint, pieces)
+    labels_key = [JOIN_UNIT] * len(pieces)
+    for s, e, code, unit, conf in res["codes"]:
+        labels_key[s] = unit if unit is not None else UNK
+    methods = {"model": res["model_labels"], "model + key": labels_key}
+    codes_by_method = {"model": [(s, e, u) for s, e, c, u, _ in res["model_codes"]],
+                       "model + key": [(s, e, u) for s, e, c, u, _ in res["codes"]]}
+
+    amb = ambiguous_codes(checkpoint["key"]["units"], info["max_pieces"], rx)
+    hard = set()
+    for i in range(len(pieces)):
+        for ps in amb.values():
+            if pieces[i:i + len(ps)] == ps:
+                hard.update(range(i, i + len(ps)))
+
+    idx = [i for i in range(len(pieces)) if scored[i]]
+    gold_spans = {(s, e, u) for s, e, c, u, li, ok in gold_codes if ok}
+    n_lines = len(numbered_lines)
+
+    def line_text(spans, keep_start):
+        out = [[] for _ in range(n_lines)]
+        for s, e, u in spans:
+            if keep_start(s):
+                out[line_of[s]].append(u if u is not None else UNK)
+        return [readable(x) for x in out]
+    gold_text = line_text([(s, e, u) for s, e, c, u, li, ok in gold_codes if ok], lambda s: True)
+
+    result = {"digit_mode": True, "digits": len(pieces), "positions_scored": len(idx),
+              "codes_scored": len(gold_spans), "lines": n_lines,
+              "codes_not_in_key": sum(1 for g in gold_codes if g[3] is None),
+              "hard_spot_digits": sum(1 for i in idx if i in hard),
+              "excluded_units": sorted(excluded), "methods": {}}
+    per_line = {}
+    for m, lab in methods.items():
+        yt, yp = [gold[i] for i in idx], [lab[i] for i in idx]
+        f1w, f1m = _f1(yt, yp)
+        st_t, st_p = [gold[i] != JOIN_UNIT for i in idx], [lab[i] != JOIN_UNIT for i in idx]
+        tp = sum(a and b for a, b in zip(st_t, st_p))
+        fp = sum(b and not a for a, b in zip(st_t, st_p))
+        fn = sum(a and not b for a, b in zip(st_t, st_p))
+        hidx = [i for i in idx if i in hard]
+        # Reading text: only codes that start on a scored digit, so unread or illegible spots do not
+        # count against either side.
+        pred_text = line_text(codes_by_method[m], lambda s: scored[s])
+        e_w = e_l = n_w = n_l = 0
+        for g, p in zip(gold_text, pred_text):
+            gw, pw, gl_, pl_ = _as_written(g), _as_written(p), _letters_only(g), _letters_only(p)
+            e_w += _edit_distance(gw, pw)
+            n_w += len(gw)
+            e_l += _edit_distance(gl_, pl_)
+            n_l += len(gl_)
+        r = {"accuracy": sum(a == b for a, b in zip(yt, yp)) / max(1, len(yt)),
+             "f1_weighted": f1w, "f1_macro": f1m,
+             "split_accuracy": sum(a == b for a, b in zip(st_t, st_p)) / max(1, len(st_t)),
+             "split_f1": 2 * tp / max(1, 2 * tp + fp + fn),
+             "codes_fully_right": len(gold_spans & set(codes_by_method[m])) / max(1, len(gold_spans)),
+             "hard_spot_accuracy": sum(gold[i] == lab[i] for i in hidx) / max(1, len(hidx)),
+             "cer_as_written": e_w / max(1, n_w), "cer_letters_only": e_l / max(1, n_l)}
+        lines = defaultdict(lambda: [0, 0])
+        for i in idx:
+            lines[line_of[i]][0] += 1
+            lines[line_of[i]][1] += gold[i] == lab[i]
+        accs = sorted(c / n for n, c in lines.values())
+        r["lines_fully_correct"] = sum(a == 1.0 for a in accs) / max(1, len(accs))
+        r["median_line_accuracy"] = accs[len(accs) // 2] if accs else None
+        if bootstrap and lines:
+            rng = random.Random(seed)
+            by_line = defaultdict(list)
+            for i in idx:
+                by_line[line_of[i]].append(i)
+            keys = list(by_line)
+            a_s, f_s = [], []
+            for _ in range(bootstrap):
+                sample = [i for _ in keys for i in by_line[keys[rng.randrange(len(keys))]]]
+                t, p = [gold[i] for i in sample], [lab[i] for i in sample]
+                a_s.append(sum(x == y for x, y in zip(t, p)) / max(1, len(t)))
+                f_s.append(_f1(t, p)[0])
+            a_s.sort()
+            f_s.sort()
+            lo, hi = int(0.025 * bootstrap), int(0.975 * bootstrap) - 1
+            r["accuracy_95ci"] = [a_s[lo], a_s[hi]]
+            r["f1_weighted_95ci"] = [f_s[lo], f_s[hi]]
+        result["methods"][m] = r
+        per_line[m] = pred_text
+    if bootstrap:
+        result["bootstrap_resamples"] = bootstrap
+    main = result["methods"]["model + key"]
+    result.update({"accuracy": main["accuracy"], "f1_weighted": main["f1_weighted"], "f1_macro": main["f1_macro"]})
+
+    support, correct, confusions = Counter(), Counter(), defaultdict(Counter)
+    for i in idx:
+        t, p = gold[i], labels_key[i]
+        support[t] += 1
+        if t == p:
+            correct[t] += 1
+        else:
+            confusions[t][p] += 1
+    units = [{"unit": u, "support": support[u], "correct": correct[u], "accuracy": correct[u] / support[u],
+              "top_confusions": confusions[u].most_common(3)} for u in support]
+    units.sort(key=lambda d: -(d["support"] - d["correct"]))
+    result["errors"] = sum(support.values()) - sum(correct.values())
+
+    details = {"pieces": pieces, "line_of": line_of, "gold": gold, "scored": scored, "gold_code": gold_code,
+               "hard": hard, "labels": methods, "confidence": res["model_confidence"],
+               "key_codes": res["codes"], "gold_text": gold_text, "pred_text": per_line,
+               "line_numbers": [no for no, _ in numbered_lines]}
+    # For reference_check: per line, the reference codes and the model + key units of the codes that start there.
+    readings = [{"line": no, "symbols": list(items), "units": []} for no, items in numbered_lines]
+    for s, e, code, unit, conf in res["codes"]:
+        readings[line_of[s]]["units"].append(unit if unit is not None else UNK)
+    return result, units, details, readings
+
+
+def describe_digits(result, units, log=print, top=15):
+    say(log, f"Digit model: scored {result['positions_scored']:,} digits ({result['codes_scored']:,} codes) on "
+             f"{result['lines']} lines. {result['codes_not_in_key']} codes are not in the key and are not scored.")
+    say(log, "The model reads the digits without the spaces, so it has to find the codes itself.")
+    say(log, f"'Hard spots' = digits where a code could also be read as shorter codes ({result['hard_spot_digits']:,} digits).\n")
+    rows = [("accuracy", "digit label accuracy"), ("f1_weighted", "F1 (weighted)"), ("f1_macro", "F1 (macro)"),
+            ("split_accuracy", "split accuracy"), ("split_f1", "split F1"),
+            ("codes_fully_right", "codes fully right"), ("hard_spot_accuracy", "hard spots"),
+            ("cer_as_written", "CER as written"), ("cer_letters_only", "CER letters only"),
+            ("lines_fully_correct", "lines fully correct")]
+    names = list(result["methods"])
+    say(log, f"{'':24}" + "".join(f"{n:>14}" for n in names))
+    for k, label in rows:
+        say(log, f"{label:24}" + "".join(f"{result['methods'][n][k]:14.2%}" for n in names))
+    for n in names:
+        ci = result["methods"][n].get("f1_weighted_95ci")
+        if ci:
+            say(log, f"  {n}: F1 (weighted) 95% CI [{ci[0]:.3f}, {ci[1]:.3f}]")
+    say(log, f"\nLabels with the most errors, model + key ({result['errors']} errors in total; "
+             f"{JOIN_LABEL_NOTE}):")
+    for u in units[:top]:
+        if u["support"] == u["correct"]:
+            break
+        conf = ", ".join(f"{p!r}×{c}" for p, c in u["top_confusions"])
+        say(log, f"  {u['unit']!r:<22} {u['support'] - u['correct']:>5} errors of {u['support']:>6}"
+                 f"  (accuracy {u['accuracy']:.2f})  read as: {conf}")
+
+
+JOIN_LABEL_NOTE = "'<JOIN>' = a digit that belongs to the code before it"
+
+
+def write_digit_evaluation(out_dir, name, result, units, details):
+    os.makedirs(out_dir, exist_ok=True)
+    paths = {k: os.path.join(out_dir, f"{name}_evaluation{suffix}") for k, suffix in
+             (("json", ".json"), ("txt", ".txt"), ("units", "_units.csv"), ("lines", "_lines.csv"),
+              ("digits", "_digits.csv"))}
+    with open(paths["json"], "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    lines = []
+    describe_digits(result, units, log=lines.append, top=len(units))
+    with open(paths["txt"], "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    with open(paths["units"], "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["label", "support", "correct", "accuracy", "top_confusions"])
+        for u in units:
+            w.writerow([u["unit"], u["support"], u["correct"], f"{u['accuracy']:.4f}",
+                        "; ".join(f"{p}×{c}" for p, c in u["top_confusions"])])
+    d = details
+    with open(paths["lines"], "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["line", "reference_reading", "model_plus_key_reading", "model_reading"])
+        for li, no in enumerate(d["line_numbers"]):
+            w.writerow([no, d["gold_text"][li], d["pred_text"]["model + key"][li], d["pred_text"]["model"][li]])
+    with open(paths["digits"], "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["line", "digit", "reference_code", "reference_label", "scored", "hard_spot",
+                    "model_label", "model_confidence", "model_plus_key_label"])
+        for i, p in enumerate(d["pieces"]):
+            w.writerow([d["line_numbers"][d["line_of"][i]], p, d["gold_code"][i], d["gold"][i],
+                        "yes" if d["scored"][i] else "no", "yes" if i in d["hard"] else "",
+                        d["labels"]["model"][i], f"{d['confidence'][i]:.3f}", d["labels"]["model + key"][i]])
+    return list(paths.values())

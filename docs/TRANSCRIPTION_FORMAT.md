@@ -21,7 +21,7 @@ Because every model is trained in this format, any transcription can be tested a
 3. **Write the cipher symbols exactly as they appear in the key,** including upper and lower case and the spelling of symbol names. The tool matches symbols to the key letter for letter: if the key says `"lam"`, the transcription must say `lam`, not `Lam` or `lambda`.
 4. **A blank used as a cipher symbol is written `_`.** Some ciphers use a gap or blank as a symbol, for example as a word divider (as in the Maximilian letters). Write it as `_`, in the key as `"_"` and in the transcription as `_`.
 5. **No quotes and no special names.** Quotes are only used in the key file. Never write `<SPACE>`, `<NULL>` or `<DOUBLE>` in a transcription; write the symbol the manuscript shows (see [below](#how-word-gaps-nulls-and-the-double-sign-work)).
-6. **Codes must be separated.** `067547700454` cannot be split into codes; write `0675 4770 0454`.
+6. **Codes of digit keys may be written as running digits.** For keys whose codes are all made of digits, the tool finds the codes itself, so `067547700454` is fine (see [Digit ciphers](#digit-ciphers-running-digits)). For all other keys, separate the symbols.
 7. **Save the file as UTF-8** if your editor asks.
 
 ## Older "one character per symbol" files
@@ -47,6 +47,20 @@ Everything on a ciphertext line is read as cipher symbols. So:
 - Very long lines (more than twice the training length, normally 100 symbols) are read in pieces.
 
 The tool does not change the transcription in any other way. Python users can normalise transcription conventions with the custom edit described in the guides.
+
+## Digit ciphers: running digits
+
+Many cipher manuscripts write the codes of a digit key as one running string of digits: `12^.` (M), `7` (F) and `71` (CHE) all appear in `7 1 1 2^.`, and where one code ends and the next begins is only known once the text is deciphered. For such keys, keybridge reads the ciphertext **digit by digit** and the model decides where each code starts. You therefore do not need to know the code boundaries, and should not guess them.
+
+This applies automatically to every key whose cipher symbols are all made of digits, with optional marks written with a digit (such as `^.` for a dot on top, `^`` for an accent, `_.` for a dot below), and where at least one code has two or more digits. Keys with letters or named symbols are not affected.
+
+How to write the transcription:
+- **Write the digits as they appear,** with each digit's marks attached exactly as in the key: `1 2^. 1 5 6 2^.` or `12^.1562^.`. Spaces between digits do not matter; they are ignored.
+- **If the manuscript itself separates the codes** (with gaps, dots or lines), you may write the codes separated by spaces, e.g. `12^. 1 5 62^.`, and choose *Use spaces as code boundaries* when reading (command line: `--use-separators`). Codes are then never read across a space. Without that option, spaces are ignored.
+- **Codes can run over line ends**: the text is read as one stream, and each code is reported on the line where its first digit is.
+- **Characters that are not digits of the key** (`?` for an illegible digit, `|`, notes) are kept as single unknown symbols and shown as `[?]` in the reading. Remove a `?` written after a digit to mark an uncertain reading (`5?` → `5`), or it counts as an extra symbol.
+
+In the decipherment, each code is shown above its reading as the model split it, e.g. `12^.` over `M`. To check a digit model against an archive decryption, see `keybridge evaluate` in [LOCAL_INSTALL.md](LOCAL_INSTALL.md#score-a-reading-against-the-key-research): it uses a transcription with the codes separated.
 
 ## How word gaps, nulls and the double sign work
 

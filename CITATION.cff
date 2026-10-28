@@ -14,7 +14,7 @@ authors:
   - family-names: Megyesi
     given-names: Beáta
     affiliation: Stockholm University
-version: 1.0.0
+version: 1.1.0
 license: MIT
 repository-code: "https://github.com/mbruton0426/keybridge"
 preferred-citation:

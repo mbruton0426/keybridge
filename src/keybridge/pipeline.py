@@ -9,9 +9,11 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 
 from . import __version__
-from .common import DOUBLE_UNIT, NULL_UNIT, SPACE_SEPARATED, SPACE_UNIT, SPECIAL_TOKENS, say, stop
+from .common import (DOUBLE_UNIT, JOIN_UNIT, NULL_UNIT, SPACE_SEPARATED, SPACE_UNIT, SPECIAL_TOKENS, UNK,
+                     say, stop)
 from .data import (build_unit_stream, chunk, describe_coverage, encrypt, make_dataset, make_vocab,
                    readable)
+from .digits import expand, info_of, piece_regex, read_digit_lines, read_stream, resolve_digit_mode
 from .keys import scrambled_key
 from .model import (DEFAULT_HYPERPARAMETERS, predict, save_model, score, train_model, tune,
                     uncertain_share)
@@ -33,6 +35,7 @@ class TrainSettings:
     search_trials: int = 20
     seed: int = 9
     max_epochs: int = 100
+    digit_mode: str = "auto"      # "auto": read digit keys digit by digit (see digits.py); "on"; "off"
 
 
 # -----------------------------------------------------------------------------
@@ -81,19 +84,34 @@ def prepare_data(key, documents, s: TrainSettings, custom_edit=None, heldout_doc
         val_u, test_u, pool = chunks[:n_val], chunks[n_val:n_val + n_test], chunks[n_val + n_test:]
     train_u = [pool[i % len(pool)] for i in range(s.training_examples)]
 
-    data = {
-        "train_units": train_u, "val_units": val_u, "test_units": test_u,
-        "train_cipher": [encrypt(u, key, rng) for u in train_u],
-        "val_cipher": [encrypt(u, key, rng) for u in val_u],
-        "test_cipher": [encrypt(u, key, rng) for u in test_u],
-        "in_vocab": make_vocab(key.symbols), "out_vocab": make_vocab(list(key.units)),
-        "rng": rng,
-    }
-    data["train_ds"] = make_dataset(data["train_cipher"], train_u, data["in_vocab"], data["out_vocab"])
-    data["val_ds"] = make_dataset(data["val_cipher"], val_u, data["in_vocab"], data["out_vocab"])
+    info = resolve_digit_mode(key, s.digit_mode)
+    codes = {name: [encrypt(u, key, rng) for u in units]
+             for name, units in (("train", train_u), ("val", val_u), ("test", test_u))}
+    units = {"train": train_u, "val": val_u, "test": test_u}
+    data = {"train_units": train_u, "val_units": val_u, "test_units": test_u, "rng": rng,
+            "test_codes": codes["test"], "digit_info": info}
+    if info:
+        # Digit mode: each code is split into its digits; the first digit is labelled with the unit,
+        # the others with <JOIN>.
+        rx = piece_regex(info["marks"])
+        for name in ("train", "val", "test"):
+            pairs = [expand(c, u, rx) for c, u in zip(codes[name], units[name])]
+            data[f"{name}_cipher"] = [p for p, _ in pairs]
+            data[f"{name}_labels"] = [l for _, l in pairs]
+        lengths = sorted(len(x) for x in data["train_cipher"])
+        info["window"] = lengths[len(lengths) // 2]
+        data["in_vocab"] = make_vocab(info["pieces"])
+        data["out_vocab"] = make_vocab(list(key.units) + [JOIN_UNIT])
+    else:
+        for name in ("train", "val", "test"):
+            data[f"{name}_cipher"] = codes[name]
+            data[f"{name}_labels"] = units[name]
+        data["in_vocab"], data["out_vocab"] = make_vocab(key.symbols), make_vocab(list(key.units))
+    data["train_ds"] = make_dataset(data["train_cipher"], data["train_labels"], data["in_vocab"], data["out_vocab"])
+    data["val_ds"] = make_dataset(data["val_cipher"], data["val_labels"], data["in_vocab"], data["out_vocab"])
 
     say(log, f"Made {len(train_u)} training, {len(val_u)} checking and {len(test_u)} test examples "
-             f"of {s.sequence_length} symbols each.")
+             f"of {s.sequence_length} plaintext units each.")
     if len(pool) < s.training_examples:
         say(log, f"  Note: the plaintext only gave {len(pool)} distinct training examples, so some text is "
                  "reused with different symbols. More plaintext would be better.")
@@ -101,9 +119,17 @@ def prepare_data(key, documents, s: TrainSettings, custom_edit=None, heldout_doc
     # Key units the training text never contains: the model cannot learn their symbols, so the
     # fit check leaves those symbols out (see fit_figures).
     data["untrained_units"] = sorted(u for u in key.units if report["unit_counts"][u] == 0)
-    say(log, "\nExample (cipher symbol → plaintext unit):")
-    pairs = zip(data["train_cipher"][0][:14], train_u[0][:14])
-    say(log, "  " + "  ".join(f"{'␣' if c == ' ' else c}→{'␣' if u == ' ' else u}" for c, u in pairs))
+    if info:
+        amb = "" if not info["marks"] else f" (digits with marks: {info['marks']})"
+        say(log, f"\nDigit cipher: the model reads single digits{amb} and decides where each code starts. "
+                 f"Examples are about {info['window']} digits long.")
+        say(log, "Example (digit → label; <JOIN> = belongs to the code before):")
+        pairs = zip(data["train_cipher"][0][:18], data["train_labels"][0][:18])
+        say(log, "  " + "  ".join(f"{c}→{'␣' if u == ' ' else u}" for c, u in pairs))
+    else:
+        say(log, "\nExample (cipher symbol → plaintext unit):")
+        pairs = zip(data["train_cipher"][0][:14], train_u[0][:14])
+        say(log, "  " + "  ".join(f"{'␣' if c == ' ' else c}→{'␣' if u == ' ' else u}" for c, u in pairs))
     say(log, "  Reads as:", readable(train_u[0]))
     return data
 
@@ -127,21 +153,56 @@ def train(key, data, s: TrainSettings, log=print):
 
     iv, ov = data["in_vocab"], data["out_vocab"]
     test_pred = predict(model, data["test_cipher"], iv, ov)
-    acc, f1 = score(test_pred, data["test_units"])
+    acc, f1 = score(test_pred, data["test_labels"])
     rng = data["rng"]
     untrained = data.get("untrained_units", [])
     untrained_symbols = {sym for u in untrained for sym in key.units[u]}
-    scrambled = []
-    for i in range(3):
-        sk = scrambled_key(key, random.Random(s.seed + 1 + i))
-        cipher = [encrypt(u, sk, rng) for u in data["test_units"]]
-        scrambled.append(share_unsure(predict(model, cipher, iv, ov), cipher, untrained_symbols))
-    metrics = {"synthetic_test_accuracy": acc, "synthetic_test_f1": f1,
-               "uncertain_share_in_key_reference": share_unsure(test_pred, data["test_cipher"], untrained_symbols),
+    info = data.get("digit_info")
+    extra = {}
+    if info:
+        ck = {"input_vocab": iv, "output_vocab": ov, "key": key.to_json(), "settings": {"digit_mode_info": info}}
+        rx = piece_regex(info["marks"])
+
+        def digit_reading(code_lists, unit_lists):
+            pieces, gold = [], []
+            for c, u in zip(code_lists, unit_lists):
+                p, l = expand(c, u, rx)
+                pieces += p
+                gold += l
+            res = read_stream(model, ck, pieces)
+            labels = [JOIN_UNIT] * len(pieces)
+            for st, _, _, unit, _ in res["codes"]:
+                labels[st] = unit if unit is not None else UNK
+            preds = [[(unit, conf) for _, _, _, unit, conf in res["codes"]]]
+            syms = [[code if unit is not None else "\u0000" for _, _, code, unit, _ in res["codes"]]]
+            return labels, gold, preds, syms
+
+        labels, gold, preds, syms = digit_reading(data["test_codes"], data["test_units"])
+        extra["synthetic_test_accuracy_model_plus_key"] = sum(a == b for a, b in zip(labels, gold)) / max(1, len(gold))
+        skip = untrained_symbols | {"\u0000"}
+        in_key_ref = share_unsure(preds, syms, skip)
+        scrambled = []
+        for i in range(3):
+            sk = scrambled_key(key, random.Random(s.seed + 1 + i))
+            _, _, p2, s2 = digit_reading([encrypt(u, sk, rng) for u in data["test_units"]], data["test_units"])
+            scrambled.append(share_unsure(p2, s2, skip))
+    else:
+        in_key_ref = share_unsure(test_pred, data["test_cipher"], untrained_symbols)
+        scrambled = []
+        for i in range(3):
+            sk = scrambled_key(key, random.Random(s.seed + 1 + i))
+            cipher = [encrypt(u, sk, rng) for u in data["test_units"]]
+            scrambled.append(share_unsure(predict(model, cipher, iv, ov), cipher, untrained_symbols))
+    metrics = {"synthetic_test_accuracy": acc, "synthetic_test_f1": f1, **extra,
+               "uncertain_share_in_key_reference": in_key_ref,
                "uncertain_share_scrambled_key_reference": sum(scrambled) / len(scrambled),
                "units_not_in_training": untrained,
                "training_minutes": seconds / 60, "epochs": len(history)}
-    say(log, f"\nOn {len(data['test_units'])} unseen synthetic examples: accuracy {acc:.1%}, F1 {f1:.3f}")
+    say(log, f"\nOn {len(data['test_units'])} unseen synthetic examples: accuracy {acc:.1%}, F1 {f1:.3f}"
+             + (" (per digit, the model's own labels)" if info else ""))
+    if info:
+        say(log, f"  Reading with the key (model + key, as keybridge reads): "
+                 f"{extra['synthetic_test_accuracy_model_plus_key']:.1%} of digits correct")
     if acc < 0.95:
         say(log, "  This is lower than usual. More training examples or the model-settings search may help.")
     return {"model": model, "hyperparameters": hp, "history": history, "metrics": metrics}
@@ -152,6 +213,7 @@ def save_training_outputs(out_dir, s: TrainSettings, key, key_path, data, result
     os.makedirs(out_dir, exist_ok=True)
     name = s.project
     record = {**asdict(s), **(extra_settings or {}), "package_version": __version__,
+              "digit_mode_info": data.get("digit_info"),
               "created": datetime.datetime.now().isoformat(timespec="seconds"),
               "key_file": os.path.basename(key_path),
               "plaintext_files": [os.path.basename(p) for p in s.plaintext_files]}
@@ -164,6 +226,8 @@ def save_training_outputs(out_dir, s: TrainSettings, key, key_path, data, result
         f.write(f"Training report for '{name}'\n\n")
         f.write("Settings\n" + json.dumps(record, ensure_ascii=False, indent=2) + "\n\n")
         f.write("Key\n" + key.summary() + "\n")
+        if data.get("digit_info"):
+            f.write("Digit cipher: read digit by digit (codes are found by the model; reading = model + key).\n")
         for w in key.warnings:
             f.write("  key note: " + w + "\n")
         f.write("\nTraining data notes\n" + ("\n".join(data["notes"]) or "none") + "\n\n")
@@ -178,14 +242,18 @@ def save_training_outputs(out_dir, s: TrainSettings, key, key_path, data, result
 def checkpoint_like(key, data, result, s: TrainSettings):
     """The same information a saved model file holds, for reading right after training."""
     return {"input_vocab": data["in_vocab"], "output_vocab": data["out_vocab"], "key": key.to_json(),
-            "metrics": result["metrics"], "settings": asdict(s)}
+            "metrics": result["metrics"], "settings": {**asdict(s), "digit_mode_info": data.get("digit_info")}}
 
 
 # -----------------------------------------------------------------------------
 # Reading a transcription with one model
 # -----------------------------------------------------------------------------
-def read_lines(model, checkpoint, numbered_lines):
-    """numbered_lines: [(line_no, symbols)]. Returns readings: dicts with line, symbols, units, confidences."""
+def read_lines(model, checkpoint, numbered_lines, use_separators=False):
+    """numbered_lines: [(line_no, symbols)]. Returns readings: dicts with line, symbols, units, confidences.
+    For digit models (see digits.py) the symbols are the codes as split by the model; spaces in the
+    transcription are ignored unless use_separators is True."""
+    if info_of(checkpoint):
+        return read_digit_lines(model, checkpoint, numbered_lines, use_separators)
     preds = predict(model, [s for _, s in numbered_lines], checkpoint["input_vocab"], checkpoint["output_vocab"])
     return [{"line": no, "symbols": syms, "units": [u for u, _ in p], "confidence": [c for _, c in p]}
             for (no, syms), p in zip(numbered_lines, preds)]
@@ -351,7 +419,10 @@ def write_reading(out_dir, name, readings, symbol_format, title, checkpoint=None
               f"{m['none']} = no reading"
               + (f", {unk} = symbol not in the key or of a unit never seen in training (the model's guess "
                  "is in the CSV)" if checkpoint else "")
-              + ". The double sign is shown as the repeated letter. 'text:' is the flowing reading.")
+              + ". The double sign is shown as the repeated letter. 'text:' is the flowing reading."
+              + (" Digit cipher: the digits were read as one stream and split into codes by the model, "
+                 "using only codes of the key (model + key); each code is shown above its reading."
+                 if checkpoint and info_of(checkpoint) else ""))
     with open(txt, "w", encoding="utf-8") as f:
         f.write(title + "\nDraft output for expert review. Confidence is the model's own certainty (0–1).\n"
                 + legend + "\n\n")

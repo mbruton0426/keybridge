@@ -6,7 +6,7 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "notebooks"
 
-INSTALL_FROM = "git+https://github.com/mbruton0426/keybridge.git"
+INSTALL_FROM = "keybridge"   # the PyPI package; use "git+https://github.com/mbruton0426/keybridge.git" for the development version
 GUIDE_URL = "https://github.com/mbruton0426/keybridge/blob/main/docs"
 
 
@@ -128,11 +128,15 @@ DOUBLE_RATE = 0.5  #@param {type:"slider", min:0, max:1, step:0.05}
 RARE_UNIT_RATE = 0.02  #@param {type:"slider", min:0, max:0.1, step:0.005}
 SEARCH_MODEL_SETTINGS = True  #@param {type:"boolean"}
 SEARCH_TRIALS = 20  #@param {type:"integer"}
+#@markdown **Digit keys** (all codes made of digits, e.g. `12`, `03`, `5^.7`): with `auto`, the model reads digit by digit and finds where each code starts, so ciphertexts can be written as running digits. `off` trains on whole codes.
+DIGIT_MODE = "auto"  #@param ["auto", "on", "off"]
 
 #@markdown ### Ciphertext to read
 DECIPHER_A_TRANSCRIPTION = True  #@param {type:"boolean"}
 TRANSCRIPTION_FILE = ""  #@param {type:"string"}
 SKIP_LINES_STARTING_WITH = "##"  #@param {type:"string"}
+#@markdown Digit keys only: treat spaces in the transcription as code boundaries (by default they are ignored and the model finds the codes).
+USE_SPACES_AS_CODE_BOUNDARIES = False  #@param {type:"boolean"}
 
 #@markdown ### Saving
 SAVE_TO_GOOGLE_DRIVE = False  #@param {type:"boolean"}
@@ -211,7 +215,7 @@ settings = TrainSettings(
     letter_replacements=LETTER_REPLACEMENTS, word_spaces=WORD_SPACES,
     training_examples=TRAINING_EXAMPLES, sequence_length=SEQUENCE_LENGTH,
     null_rate=NULL_RATE, double_rate=DOUBLE_RATE, rare_unit_rate=RARE_UNIT_RATE,
-    search_trials=SEARCH_TRIALS if SEARCH_MODEL_SETTINGS else 0, seed=SEED)
+    search_trials=SEARCH_TRIALS if SEARCH_MODEL_SETTINGS else 0, seed=SEED, digit_mode=DIGIT_MODE)
 replacements = parse_replacements(LETTER_REPLACEMENTS)
 heldout = None
 own_list = custom_plaintext_documents()
@@ -248,7 +252,7 @@ else:
     lines = read_transcription(transcription_path, TRANSCRIPTION_FORMAT, parse_skip_prefixes(SKIP_LINES_STARTING_WITH),
                                custom_edit_transcription_line, SEQUENCE_LENGTH)
     ck = checkpoint_like(key, data, result, settings)
-    readings = read_lines(result["model"], ck, lines)
+    readings = read_lines(result["model"], ck, lines, USE_SPACES_AS_CODE_BOUNDARIES)
     reading_files = write_reading(OUT_DIR, SAFE_NAME, readings, TRANSCRIPTION_FORMAT,
                                   f"Decipherment of {os.path.basename(transcription_path)} with model '{SAFE_NAME}'",
                                   checkpoint=ck)
@@ -293,7 +297,8 @@ else:
 - Key source: {KEY_SOURCE}
 - Transcription format: {TRANSCRIPTION_FORMAT}
 - Plaintext used for training: {PLAINTEXT_SOURCE} {', '.join(os.path.basename(p) for p in plaintext_paths)}
-- Training examples: {TRAINING_EXAMPLES} × {SEQUENCE_LENGTH} symbols
+- Training examples: {TRAINING_EXAMPLES} × {SEQUENCE_LENGTH} plaintext units
+- Digit mode (read digit by digit): {'yes' if data.get('digit_info') else 'no'}
 - Accuracy on unseen synthetic text: {m['synthetic_test_accuracy']:.3f} (F1 {m['synthetic_test_f1']:.3f})
 - Package version: {keybridge.__version__}
 - Licence: CC BY 4.0
@@ -349,7 +354,8 @@ The best result, or the best few if their scores are close, is downloaded automa
 
 Your transcription must follow the [transcription format]({GUIDE_URL}/TRANSCRIPTION_FORMAT.md): one manuscript
 line per line, the cipher symbols separated by spaces and written exactly as in the keys, and a blank
-symbol (word divider) written as `_`.
+symbol (word divider) written as `_`. **Digit ciphers** can be written as running digits: models for digit keys
+read digit by digit and find where each code starts ([details]({GUIDE_URL}/TRANSCRIPTION_FORMAT.md#digit-ciphers-running-digits)).
 
 The guide explains the settings and how to read the results: [{GUIDE_URL}/READING_AND_SCANNING_GUIDE.md]({GUIDE_URL}/READING_AND_SCANNING_GUIDE.md)
 
@@ -367,6 +373,8 @@ TRANSCRIPTION_FILE = ""  #@param {type:"string"}
 #@markdown **Standard:** *symbols separated by spaces*. *One character per symbol* is also accepted and converted (a blank symbol becomes `_`).
 TRANSCRIPTION_FORMAT = "symbols separated by spaces"  #@param ["symbols separated by spaces", "one character per symbol"]
 SKIP_LINES_STARTING_WITH = "##"  #@param {type:"string"}
+#@markdown Digit models only: treat spaces as code boundaries. By default they are ignored, so running digits work and the model finds the codes.
+USE_SPACES_AS_CODE_BOUNDARIES = False  #@param {type:"boolean"}
 
 #@markdown ### Which models to test
 WHICH_MODELS = "All shared models"  #@param ["All shared models", "Shared models with digit codes", "Shared models with single-character symbols", "Shared models with named symbols", "Specific shared models (IDs below)", "Only my own model file(s)"]
@@ -409,6 +417,9 @@ lines = read_transcription(transcription_path, TRANSCRIPTION_FORMAT, parse_skip_
 n_symbols = sum(len(s) for _, s in lines)
 print(f"Transcription: {os.path.basename(transcription_path)}, {len(lines)} lines, {n_symbols} symbols, "
       f"{len({x for _, s in lines for x in s})} distinct symbols.")
+n_digits = sum(ch.isdigit() for _, s in lines for x in s for ch in x)
+if n_digits and n_symbols and n_digits > 1.2 * n_symbols:
+    print(f"  ({n_digits} digits: models for digit keys read these one digit at a time and find the codes themselves.)")
 own_models = []
 if USE_MY_OWN_MODEL_FILES or WHICH_MODELS.startswith("Only"):
     own_models = find_or_upload(MY_MODEL_FILES, "model file(s) (.pt)", UPLOAD_DIR, multiple=True)
@@ -436,7 +447,8 @@ code(r'''
 from keybridge.scan import scan, top_group, describe_ranking
 langs = {c.strip() for c in LANGUAGES.split(",") if c.strip()} or None
 print(f"Testing {len(entries) + len(own_models)} model(s)...")
-results = scan(lines, TRANSCRIPTION_FORMAT, registry, entries, own_models, langs, MIN_SYMBOL_COVERAGE)
+results = scan(lines, TRANSCRIPTION_FORMAT, registry, entries, own_models, langs, MIN_SYMBOL_COVERAGE,
+               use_separators=USE_SPACES_AS_CODE_BOUNDARIES)
 top = top_group(results, CLOSE_MARGIN)
 print()
 describe_ranking(results, top)

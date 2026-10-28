@@ -108,8 +108,8 @@ If your plaintext has no word gaps (like the built-in texts), "keep real word bo
 | Letter replacements | Letters to rewrite before encrypting, e.g. `J=I, V=U`. |
 | Word spaces | How word gaps appear in training ([section 4](#4-plaintext-to-learn-from)). |
 | Training examples | 5,000 by default. With rare units inserted, 2,000 is too few for them to be learned; 5,000 was enough in tests on authentic letters, and 10,000 gave no further gain. 2,000 is enough without rare units, or for a quick check. |
-| Sequence length | Symbols per training example. 50 works well; roughly the length of a manuscript line is a good choice. |
-| Null rate | Share of positions that get a null (only if your key has `<NULL>`). Raise it if your ciphertexts use many nulls. |
+| Sequence length | Plaintext units per training example. 50 works well; roughly the length of a manuscript line is a good choice. For digit keys, an example then has more digits than units (e.g. about 80 digits for 50 units). |
+| Null rate | Share of positions that get a null (only if your key has `<NULL>`). Raise it if your ciphertexts use many nulls. For a digit key whose null digit never occurs inside a code, the share of that digit in the ciphertext is a good guide. |
 | Double rate | Chance that a doubled letter is written with the double-letter sign (only if your key has `<DOUBLE>`). |
 | Rare unit rate | 0.02 by default. Inserts key units that occur fewer than 20 times in the plaintext (nomenclature, punctuation, letters the language lacks) at this rate per word gap ([section 7](#7-rare-units-and-nomenclature)). 0 turns it off. |
 | Search model settings | On by default: tries 20 model settings (short trials of 10 rounds each, `SEARCH_TRIALS`) on the checking examples and trains the final model with the best. Adds roughly 10–60 minutes depending on training size and GPU. Untick it to use the fixed default settings instead. |
@@ -118,6 +118,8 @@ If your plaintext has no word gaps (like the built-in texts), "keep real word bo
 | Skip lines starting with | Transcription lines to ignore (default `##`; a single `#` is not skipped, since `#` can be a cipher symbol). Several markers can be given, separated by commas. |
 | Save to Google Drive | Also copies all results to *My Drive/cipher_models/your project*. |
 | Share my model | See [section 8](#8-sharing-your-model). |
+| Digit mode | `auto` by default: keys whose codes are all digits (with optional marks such as `^.`) are trained digit by digit, so the model learns to find where codes start in running digits ([Digit ciphers](TRANSCRIPTION_FORMAT.md#digit-ciphers-running-digits)). `off` trains on whole codes as before; `on` insists on digit mode. |
+| Use spaces as code boundaries | Digit keys only: treat spaces in your transcription as code boundaries. Off by default (spaces are ignored and the model finds the codes). |
 | Seed | Fixes the random choices so a run can be repeated exactly. |
 
 ---

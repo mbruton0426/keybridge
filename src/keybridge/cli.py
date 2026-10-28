@@ -7,6 +7,9 @@
     keybridge models  list | download
     keybridge languages
     keybridge evaluate --model my_cipher_model.pt --transcription letter.txt   (research: F1 against the key)
+
+Digit keys (all codes made of digits, e.g. 12, 03, 5^.7) are read digit by digit: write the
+ciphertext as running digits, and the model finds where each code starts.
     keybridge index-entry my_cipher_model.pt --add-to index.json      (for maintainers)
 
 Run any command with --help for its options.
@@ -48,7 +51,8 @@ def cmd_train(a):
                       letter_replacements=a.replacements, word_spaces=a.word_spaces,
                       training_examples=a.examples, sequence_length=a.length, null_rate=a.null_rate,
                       double_rate=a.double_rate, rare_unit_rate=a.rare_rate,
-                      search_trials=a.search_trials, seed=a.seed, max_epochs=a.max_epochs)
+                      search_trials=a.search_trials, seed=a.seed, max_epochs=a.max_epochs,
+                      digit_mode=a.digit_mode)
     train_edit, line_edit = _load_custom_edits(a.custom_edits)
     key = load_key(a.key, fmt)
     print(key.summary())
@@ -74,7 +78,7 @@ def cmd_train(a):
     if a.transcription:
         model, ck = load_model(model_path)
         lines = read_transcription(a.transcription, fmt, a.skip.split(","), line_edit, a.length)
-        readings = read_lines(model, ck, lines)
+        readings = read_lines(model, ck, lines, a.use_separators)
         write_reading(out_dir, name, readings, fmt, f"Decipherment of {os.path.basename(a.transcription)}",
                       checkpoint=ck)
         preview(readings)
@@ -100,7 +104,7 @@ def cmd_read(a):
     _, line_edit = _load_custom_edits(a.custom_edits)
     lines = read_transcription(a.transcription, fmt, a.skip.split(","), line_edit,
                                ck["settings"].get("sequence_length"))
-    readings = read_lines(model, ck, lines)
+    readings = read_lines(model, ck, lines, a.use_separators)
     name = safe_name(os.path.splitext(os.path.basename(a.transcription))[0])
     files = write_reading(a.out, name, readings, fmt,
                           f"Decipherment of {os.path.basename(a.transcription)} with {os.path.basename(path)}",
@@ -130,7 +134,8 @@ def cmd_scan(a):
         raise StopHere("No models to test. Give your own with --model-file.")
     print(f"Testing {len(entries) + len(a.model_file or [])} model(s) on {len(lines)} lines...")
     langs = set(a.languages.split(",")) if a.languages else None
-    results = scan(lines, fmt, reg, entries, a.model_file or [], langs, a.min_coverage)
+    results = scan(lines, fmt, reg, entries, a.model_file or [], langs, a.min_coverage,
+                   use_separators=a.use_separators)
     top = top_group(results, a.margin, a.max_close)
     print()
     describe_ranking(results, top)
@@ -140,6 +145,7 @@ def cmd_scan(a):
 
 
 def cmd_evaluate(a):
+    from .digits import info_of
     from .evaluate import describe, evaluate, write_evaluation
     from .keys import load_key
     from .model import load_model
@@ -150,17 +156,31 @@ def cmd_evaluate(a):
         reg = _registry(a)
         path = reg.model_path(reg.entries(ids=[a.model])[0])
     model, ck = load_model(path)
-    fmt = resolve_format(a.format) if a.format else ck["settings"].get("symbol_format")
+    digit = info_of(ck)
+    if digit:
+        # Digit models are scored against a transcription with the codes separated by spaces.
+        fmt = resolve_format("space")
+    else:
+        fmt = resolve_format(a.format) if a.format else ck["settings"].get("symbol_format")
     gold_key = load_key(a.key) if a.key else None
     _, line_edit = _load_custom_edits(a.custom_edits)
     lines = read_transcription(a.transcription, fmt, a.skip.split(","), line_edit,
-                               ck["settings"].get("sequence_length"))
+                               None if digit else ck["settings"].get("sequence_length"))
     exclude = [u.strip().upper() for u in a.exclude_units.split(",") if u.strip()] if a.exclude_units else []
-    result, units, per_line, readings = evaluate(model, ck, lines, gold_key, a.exclude_unknown, exclude,
-                                                 a.bootstrap, a.seed)
-    describe(result, units)
     name = safe_name(a.name or os.path.splitext(os.path.basename(a.transcription))[0])
-    files = write_evaluation(a.out, name, result, units, per_line, readings)
+    if digit:
+        from .evaluate import describe_digits, evaluate_digits, write_digit_evaluation
+        if a.exclude_unknown:
+            print("Note: for digit models, codes that are not in the key are never scored, so --exclude-unknown "
+                  "changes nothing.")
+        result, units, details, readings = evaluate_digits(model, ck, lines, gold_key, exclude, a.bootstrap, a.seed)
+        describe_digits(result, units)
+        files = write_digit_evaluation(a.out, name, result, units, details)
+    else:
+        result, units, per_line, readings = evaluate(model, ck, lines, gold_key, a.exclude_unknown, exclude,
+                                                     a.bootstrap, a.seed)
+        describe(result, units)
+        files = write_evaluation(a.out, name, result, units, per_line, readings)
     if a.reference_plaintext:
         from .evaluate import (describe_reference_check, read_reference_plaintext, reference_check,
                                write_reference_check)
@@ -250,6 +270,11 @@ def main(argv=None):
                    help="short trials of the model-settings search (default 20; 0 = skip the search and use the fixed default settings)")
     t.add_argument("--seed", type=int, default=9)
     t.add_argument("--max-epochs", type=int, default=100, help="upper limit on training rounds")
+    t.add_argument("--digit-mode", default="auto", choices=["auto", "on", "off"],
+                   help="digit keys: read digit by digit so the model finds where codes start (default auto: "
+                        "on for keys whose codes are all digits, with optional marks such as ^.)")
+    t.add_argument("--use-separators", action="store_true",
+                   help="digit models: treat spaces in the transcription as code boundaries")
     t.add_argument("--transcription", help="also read this transcription after training")
     t.add_argument("--skip", default="##", help="skip transcription lines starting with these (comma-separated)")
     t.add_argument("--custom-edits", help="Python file defining custom_edit_training_units / custom_edit_transcription_line")
@@ -264,6 +289,9 @@ def main(argv=None):
         r.add_argument("--custom-edits")
         r.add_argument("--out", default="outputs")
         r.add_argument("--models-from", help="Hugging Face repo id or local folder of the model collection")
+        r.add_argument("--use-separators", action="store_true",
+                       help="digit models: treat spaces in the transcription as code boundaries "
+                            "(by default they are ignored and the model finds the codes)")
         r.set_defaults(func=func)
         if name == "read":
             r.add_argument("--model", required=True, help="model file (.pt) or model ID from the collection")
@@ -282,7 +310,8 @@ def main(argv=None):
 
     ev = sub.add_parser("evaluate", help="(research) score a model's reading against the key")
     ev.add_argument("--model", required=True, help="model file (.pt) or model ID from the collection")
-    ev.add_argument("--transcription", required=True)
+    ev.add_argument("--transcription", required=True,
+                    help="for digit models: the transcription with the codes separated by spaces (the reference)")
     ev.add_argument("--format", help=fmt_help + " (default: the model's own)")
     ev.add_argument("--key", help="key to derive the reference from (default: the key stored in the model)")
     ev.add_argument("--reference-plaintext", help="the archive's plaintext transcription, line by line, to check "

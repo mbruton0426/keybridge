@@ -88,6 +88,7 @@ def make_index_entry(model_path, model_id=None):
     key = CipherKey.from_json(ck["key"])
     s, m = ck.get("settings", {}), ck.get("metrics", {})
     model_id = model_id or s.get("project") or os.path.basename(model_path).replace("_model.pt", "")
+    digit = s.get("digit_mode_info")
     lengths = {}
     for sym in key.symbols:
         lengths[str(len(sym))] = lengths.get(str(len(sym)), 0) + 1
@@ -98,7 +99,8 @@ def make_index_entry(model_path, model_id=None):
         "key_file": f"{model_id}/{model_id}_key.tsv",
         "sha256": sha256(model_path),
         "symbol_format": s.get("symbol_format"),
-        "symbol_type": key.symbol_type(),
+        "symbol_type": "digits" if digit else key.symbol_type(),
+        "digit_mode": {"marks": digit["marks"], "pieces": digit["pieces"]} if digit else None,
         "symbols": key.symbols,
         "symbol_lengths": lengths,
         "plaintext_units": len(key.units),
@@ -122,7 +124,15 @@ def new_index():
             "license": LICENSE, "citation": CITATION, "models": []}
 
 
-def entry_symbol_coverage(entry_symbols, numbered_lines):
+def entry_symbol_coverage(entry_symbols, numbered_lines, digit_mode=None):
+    """Share of the transcription's symbols that are in the key. For digit models (digit_mode with
+    'marks' and 'pieces'), the share of digits (with their marks) that the model knows."""
+    if digit_mode:
+        from .digits import piece_regex, tokenize_symbols
+        rx = piece_regex(digit_mode.get("marks", ""))
+        known = set(digit_mode.get("pieces", []))
+        pieces = [p for _, line in numbered_lines for p, _ in tokenize_symbols(line, rx)]
+        return sum(p in known for p in pieces) / max(1, len(pieces))
     known = set(entry_symbols)
     symbols = [s for _, line in numbered_lines for s in line]
     return sum(s in known for s in symbols) / max(1, len(symbols))

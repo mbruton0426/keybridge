@@ -1,15 +1,25 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "keybridge"
-version = "1.0.0"
+version = "1.1.0"
 description = "Shared-space neural decipherment of historical simple and homophonic substitution ciphers"
 readme = "README.md"
-license = {text = "MIT"}  # code; models, keys, language profiles and docs: CC BY 4.0
+license = "MIT AND CC-BY-4.0"  # code: MIT; language profiles, keys and docs: CC BY 4.0
+license-files = ["LICENSE", "LICENSE-CC-BY-4.0.txt"]
 authors = [{name = "Micaella Bruton"}, {name = "Meriem Beloucif"}, {name = "Beáta Megyesi"}]
 requires-python = ">=3.9"
+keywords = ["cryptology", "historical cryptology", "cipher", "decipherment", "homophonic cipher", "substitution cipher", "neural network"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
 dependencies = [
     "torch>=2.1",
     "scikit-learn>=1.0",
@@ -26,6 +36,9 @@ keybridge = "keybridge.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/mbruton0426/keybridge"
+Documentation = "https://github.com/mbruton0426/keybridge/tree/main/docs"
+Models = "https://huggingface.co/mbruton/keybridge-models"
+Issues = "https://github.com/mbruton0426/keybridge/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

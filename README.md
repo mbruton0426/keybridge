@@ -8,13 +8,13 @@ The method and its evaluation are described in: *[citation to be added]* <!-- PL
 
 | | What it does | Where it runs |
 |-|--------------|---------------|
-| **① Train a model for your key** | You provide a key and plaintext in the cipher's language; you get a trained model and, optionally, a draft decipherment of your transcription. | [Open in Colab](https://colab.research.google.com/github/mbruton0426/keybridge/blob/main/notebooks/1_train_your_own_model.ipynb) · [Guide](docs/TRAINING_GUIDE.md) |
-| **② Read or scan a ciphertext** | Runs your transcription through one model, or all models in the shared collection. Ranks which keys it fits and which language the result reads like. | [Open in Colab](https://colab.research.google.com/github/mbruton0426/keybridge/blob/main/notebooks/2_read_or_scan_a_ciphertext.ipynb) · [Guide](docs/READING_AND_SCANNING_GUIDE.md) |
-| **Local version** | The same as ① and ② from the command line, entirely on your own computer. It can run fully offline. | [Install and use](docs/LOCAL_INSTALL.md) |
+| **① Train a model for your key** | You provide a key and plaintext in the cipher's language; you get a trained model and, optionally, a draft decipherment of your transcription. | [Open in Colab](https://colab.research.google.com/github/mbruton0426/keybridge/blob/main/notebooks/1_train_your_own_model.ipynb) · [Guide](https://github.com/mbruton0426/keybridge/blob/main/docs/TRAINING_GUIDE.md) |
+| **② Read or scan a ciphertext** | Runs your transcription through one model, or all models in the shared collection. Ranks which keys it fits and which language the result reads like. | [Open in Colab](https://colab.research.google.com/github/mbruton0426/keybridge/blob/main/notebooks/2_read_or_scan_a_ciphertext.ipynb) · [Guide](https://github.com/mbruton0426/keybridge/blob/main/docs/READING_AND_SCANNING_GUIDE.md) |
+| **Local version** | The same as ① and ② from the command line, entirely on your own computer. It can run fully offline. | [Install and use](https://github.com/mbruton0426/keybridge/blob/main/docs/LOCAL_INSTALL.md) |
 
-The Colab notebooks need only a Google account and a web browser. Nothing has to be installed, and no code has to be written. Keys and transcriptions are simple text files in one standard format (symbols separated by spaces): see **[Key file format](docs/KEY_FORMAT.md)** and **[Transcription format](docs/TRANSCRIPTION_FORMAT.md)**.
+The Colab notebooks need only a Google account and a web browser. Nothing has to be installed, and no code has to be written. Keys and transcriptions are simple text files in one standard format (symbols separated by spaces): see **[Key file format](https://github.com/mbruton0426/keybridge/blob/main/docs/KEY_FORMAT.md)** and **[Transcription format](https://github.com/mbruton0426/keybridge/blob/main/docs/TRANSCRIPTION_FORMAT.md)**.
 
-For research use, `keybridge evaluate` scores a model's reading of an authentic ciphertext against its key (F1 with confidence intervals), as reported in the paper; see [LOCAL_INSTALL.md](docs/LOCAL_INSTALL.md#score-a-reading-against-the-key-research).
+For research use, `keybridge evaluate` scores a model's reading of an authentic ciphertext against its key (F1 with confidence intervals), as reported in the paper; see [LOCAL_INSTALL.md](https://github.com/mbruton0426/keybridge/blob/main/docs/LOCAL_INSTALL.md#score-a-reading-against-the-key-research).
 
 ## What it can and cannot do
 
@@ -31,7 +31,6 @@ For research use, `keybridge evaluate` scores a model's reading of an authentic 
 
 The tool handles simple and homophonic substitution, where each cipher symbol stands for exactly one thing (a simple substitution cipher is the special case with one symbol per letter): a letter, a group of letters, a whole word (nomenclature), a word gap, a null, or a "repeat the previous letter" sign. The following are **not** supported:
 
-- **Codes written without separators.** A transcription such as `067547700454`, meaning the codes 0675 4770 0454, cannot be split correctly. Transcribe with spaces between codes.
 - **Symbols with several meanings (polyphones).** Each symbol can stand for only one thing.
 - **Context-dependent rules.** Symbols whose meaning depends on their position or on neighbouring symbols.
 - **Cancellation signs.** Symbols that mean "ignore the previous symbol" or "delete the next symbol".
@@ -39,9 +38,11 @@ The tool handles simple and homophonic substitution, where each cipher symbol st
 
 Python users can imitate some of these with custom edits (see the guides).
 
+**Digit ciphers written as running digits are supported** (since version 1.1). For keys whose codes are all digits (optionally with marks such as a dot on top), the model reads the ciphertext digit by digit and finds where each code starts, so the code boundaries need not be known. See [Digit ciphers](https://github.com/mbruton0426/keybridge/blob/main/docs/TRANSCRIPTION_FORMAT.md#digit-ciphers-running-digits).
+
 ## Privacy
 
-In Colab, files are processed on Google's servers for the length of a session, and are deleted when it ends unless you save them to Google Drive. Nothing is shared unless you choose to share a trained model. For full control, use the [local version](docs/LOCAL_INSTALL.md).
+In Colab, files are processed on Google's servers for the length of a session, and are deleted when it ends unless you save them to Google Drive. Nothing is shared unless you choose to share a trained model. For full control, use the [local version](https://github.com/mbruton0426/keybridge/blob/main/docs/LOCAL_INSTALL.md).
 
 ## Repository contents
 
@@ -49,15 +50,16 @@ In Colab, files are processed on Google's servers for the length of a session, a
 |--------|----------|
 | `notebooks/` | The two Colab notebooks (generated by `tools/build_notebooks.py`). |
 | `src/keybridge/` | The Python package used by the notebooks and the command line. |
-| `docs/` | Guides for users, and [setup notes for maintainers](docs/MAINTAINER_SETUP.md). |
+| `docs/` | Guides for users, and [setup notes for maintainers](https://github.com/mbruton0426/keybridge/blob/main/docs/MAINTAINER_SETUP.md). |
 | `examples/` | Example keys (Maximilian II, Copiale) and a synthetic transcription. |
 | `tools/` | Scripts for building the notebooks and the language statistics. |
 | `hf_collection_template/` | Template for the Hugging Face model collection. |
 | `LICENSE`, `LICENSE-CC-BY-4.0.txt`, `CITATION.cff` | Licences and citation information. |
+| `CHANGELOG.md` | What changed in each version. |
 
 ## Licence and citation
 
-- **Code** (`src/`, `tools/`, `notebooks/`): [MIT licence](LICENSE).
-- **Models, keys, language profiles and documentation:** [CC BY 4.0](LICENSE-CC-BY-4.0.txt).
+- **Code** (`src/`, `tools/`, `notebooks/`): [MIT licence](https://github.com/mbruton0426/keybridge/blob/main/LICENSE).
+- **Models, keys, language profiles and documentation:** [CC BY 4.0](https://github.com/mbruton0426/keybridge/blob/main/LICENSE-CC-BY-4.0.txt).
 
-You may use and adapt all of it for any purpose. If you use the tool, its models or its keys in your work, please cite the publication above. GitHub's "Cite this repository" button gives the reference ([CITATION.cff](CITATION.cff)). When you use a model from the shared collection, please also credit the original source of its key, given in the model's description.
+You may use and adapt all of it for any purpose. If you use the tool, its models or its keys in your work, please cite the publication above. GitHub's "Cite this repository" button gives the reference ([CITATION.cff](https://github.com/mbruton0426/keybridge/blob/main/CITATION.cff)). When you use a model from the shared collection, please also credit the original source of its key, given in the model's description.

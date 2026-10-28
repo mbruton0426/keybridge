@@ -18,6 +18,7 @@ import torch
 
 from .common import say
 from .data import parse_replacements, readable
+from .digits import info_of
 from .languages import available_languages, rank_languages
 from .model import load_model
 from .pipeline import fit_figures, fit_score, read_lines, write_reading
@@ -28,8 +29,8 @@ DEFAULT_MARGIN = 0.05
 DEFAULT_MAX_CLOSE = 3
 
 
-def _score_one(model, ck, numbered_lines, languages, log):
-    readings = read_lines(model, ck, numbered_lines)
+def _score_one(model, ck, numbered_lines, languages, log, use_separators=False):
+    readings = read_lines(model, ck, numbered_lines, use_separators)
     figs = fit_figures(readings, ck)
     fit = fit_score(figs)
     units = [u for r in readings for u in r["units"] + [" "]]
@@ -46,9 +47,11 @@ def _score_one(model, ck, numbered_lines, languages, log):
 
 
 def scan(numbered_lines, symbol_format, registry=None, entries=(), local_models=(), languages=None,
-         min_coverage=DEFAULT_MIN_COVERAGE, log=print):
+         min_coverage=DEFAULT_MIN_COVERAGE, log=print, use_separators=False):
     """entries: index entries (from registry.entries()); local_models: paths to .pt files.
-    Returns results sorted best first; each has id, name, status, figures and readings."""
+    Returns results sorted best first; each has id, name, status, figures and readings.
+    Digit models read the transcription digit by digit; spaces are then only used as code
+    boundaries if use_separators is True."""
     results = []
     jobs = [("index", e) for e in entries] + [("file", p) for p in local_models]
     if not available_languages():
@@ -56,7 +59,7 @@ def scan(numbered_lines, symbol_format, registry=None, entries=(), local_models=
     for i, (kind, item) in enumerate(jobs, 1):
         if kind == "index":
             mid, name = item["id"], item.get("name", item["id"])
-            cov = entry_symbol_coverage(item.get("symbols", []), numbered_lines)
+            cov = entry_symbol_coverage(item.get("symbols", []), numbered_lines, item.get("digit_mode"))
             if cov < min_coverage:
                 results.append({"id": mid, "name": name, "status": "symbols do not match the key",
                                 "coverage": cov, "score": 0.0})
@@ -67,13 +70,14 @@ def scan(numbered_lines, symbol_format, registry=None, entries=(), local_models=
             path = item
             mid = name = os.path.basename(path).replace("_model.pt", "").replace(".pt", "")
         model, ck = load_model(path)
-        readings, figs = _score_one(model, ck, numbered_lines, languages, log)
+        readings, figs = _score_one(model, ck, numbered_lines, languages, log, use_separators)
         status = "scored"
         if figs["coverage"] < min_coverage:
             status, figs["score"] = "symbols do not match the key", 0.0
         results.append({"id": mid, "name": name, "status": status, "readings": readings,
                         "symbol_format": symbol_format,
-                        "checkpoint_info": {"key": ck["key"], "metrics": ck.get("metrics", {})}, **figs})
+                        "checkpoint_info": {"key": ck["key"], "metrics": ck.get("metrics", {}),
+                                            "settings": {"digit_mode_info": info_of(ck)}}, **figs})
         lang = f", reads most like {figs['languages'][0][1]}" if figs.get("languages") else ""
         sc = f"{figs['score']:.2f}" if figs["score"] is not None else "n/a"
         say(log, f"  [{i}/{len(jobs)}] {mid}: score {sc}{lang}")

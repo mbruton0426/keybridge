@@ -12,6 +12,9 @@ DOUBLE_UNIT = "<DOUBLE>"    # "repeat the previous letter" sign
 SPECIAL_UNIT_NAMES = {"<SPACE>": SPACE_UNIT, "<NULL>": NULL_UNIT, "<DOUBLE>": DOUBLE_UNIT}
 SPECIAL_UNITS = set(SPECIAL_UNIT_NAMES.values())
 
+# Digit mode (see digits.py): label of a digit that belongs to the code before it.
+JOIN_UNIT = "<JOIN>"
+
 # A blank space used as a cipher symbol (e.g. a word divider) is always written as this
 # visible symbol, in keys, transcriptions and outputs, so that every key and transcription
 # can use the standard "symbols separated by spaces" format.

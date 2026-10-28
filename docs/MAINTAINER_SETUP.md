@@ -43,7 +43,7 @@ The repository must be **public**, because the notebooks install the package str
 
 **Before the repository exists**, you can still test in Colab. Upload this folder to Colab (e.g. as `/content/keybridge_repo`), and in step ② of a notebook change `INSTALL_FROM` to that path.
 
-**Versions.** When you publish the paper, create a release (e.g. `v1.0.0`). Then change `INSTALL_FROM` in `tools/build_notebooks.py` to `git+https://github.com/mbruton0426/YOUR-REPO-NAME.git@v1.0.0` and rebuild the notebooks, so that the published notebooks keep working the same way even after later changes. Connecting the repository to Zenodo gives each release a citable DOI.
+**Versions and PyPI.** The notebooks install the PyPI package `keybridge`. To publish a new version: raise `version` in `pyproject.toml`, then run `python -m build` and `python -m twine upload dist/*` (with a PyPI API token), and tag the same version on GitHub (e.g. `v1.1.0`). Also raise `__version__` in `src/keybridge/__init__.py` and `version` in `CITATION.cff`, and add an entry to `CHANGELOG.md`. To pin the notebooks to one version, set `INSTALL_FROM` in `tools/build_notebooks.py` to e.g. `keybridge==1.0.0` and rebuild them. Connecting the GitHub repository to Zenodo gives each release a citable DOI.
 
 ## 3. The language statistics
 
@@ -84,7 +84,7 @@ copiale/
 | `name` | **by you** | Human-readable name. |
 | `path`, `key_file` | automatically | Files inside the repository. |
 | `sha256` | automatically | Checksum of the model file. |
-| `symbol_format`, `symbol_type`, `symbols`, `symbol_lengths` | automatically | `symbols` is used to pre-filter models (symbol coverage) without downloading them, and `symbol_type` for the "digit codes / single characters / named symbols" choices. `symbol_format` only records how the training transcription was written; all models use the standard format. `symbol_type` is `digits`, `characters` (one character each) or `named`. |
+| `symbol_format`, `symbol_type`, `symbols`, `symbol_lengths` | automatically | `symbols` is used to pre-filter models (symbol coverage) without downloading them, and `symbol_type` for the "digit codes / single characters / named symbols" choices. `symbol_format` only records how the training transcription was written; all models use the standard format. `symbol_type` is `digits`, `characters` (one character each) or `named`. Digit models (read digit by digit) are `digits` and also get `digit_mode` (their digit marks and the digits they know), which is used for the coverage check instead of `symbols`. |
 | `letter_replacements`, `training_plaintext`, `training_examples`, accuracy and reference figures | automatically | From the model file. |
 | `plaintext_language` | **by you** | Language code of the cipher's plaintext, if known. |
 | `period`, `source`, `contributor` | **by you** | Shown to users; `source` should let people cite the key. |

@@ -36,6 +36,8 @@ Digit codes work in the same way:
 "THE KING"→"901"→yes
 ```
 
+**Digit keys.** When every symbol of a key is made of digits, and at least one has two or more digits, the model reads ciphertexts digit by digit and finds the codes itself, so transcriptions can be written as running digits (see [Digit ciphers](TRANSCRIPTION_FORMAT.md#digit-ciphers-running-digits)). Marks written with a digit are part of the symbol, e.g. `"12^."` (2 with a dot on top) or `"7^`1"` (7 with an accent, then 1). Write a code and its marks exactly as in the transcriptions; `"02"` and `"2"` are different codes.
+
 ## Special entries
 
 Write these **without quotes** in the plaintext position:
@@ -90,10 +92,9 @@ The tool checks the file and lists every problem with its line number. The usual
 
 ## What keys can and cannot express
 
-Supported: each cipher symbol stands for exactly one thing, whether a letter, a group of letters, a whole word, a word gap, a null or the double-letter sign.
+Supported: each cipher symbol stands for exactly one thing, whether a letter, a group of letters, a whole word, a word gap, a null or the double-letter sign. For digit keys, codes written as running digits without separators are supported (see above).
 
 Not supported:
-- **Codes written without separators** in the transcription (e.g. `067547700454` meaning 0675 4770 0454). Transcribe with spaces between codes.
 - **Symbols with several meanings** (polyphones).
 - **Context-dependent rules**, where a symbol's meaning depends on its position or neighbours.
 - **Cancellation signs** ("ignore the previous symbol").
