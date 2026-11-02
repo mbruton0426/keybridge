@@ -124,8 +124,12 @@ TRAINING_EXAMPLES = 5000  #@param [2000, 5000, 10000] {type:"raw"}
 SEQUENCE_LENGTH = 50  #@param {type:"integer"}
 NULL_RATE = 0.05  #@param {type:"slider", min:0, max:0.3, step:0.01}
 DOUBLE_RATE = 0.5  #@param {type:"slider", min:0, max:1, step:0.05}
-#@markdown Insert key units that are rare or missing in the plaintext (nomenclature, punctuation, letters the language lacks) at this rate per word gap. 0 turns it off.
+#@markdown Insert key units that are rare or missing in the plaintext (nomenclature, punctuation, letters the language lacks) at this rate (per word gap, or per position when the plaintext has no word gaps, as in the built-in HistCiph text). 0 turns it off.
 RARE_UNIT_RATE = 0.02  #@param {type:"slider", min:0, max:0.1, step:0.005}
+#@markdown Multi-letter units (syllables, words) are used this share of the time and spelled out otherwise, as historical clerks did.
+MULTI_CHAR_RATE = 0.7  #@param {type:"slider", min:0, max:1, step:0.05}
+#@markdown Keys with cancel signs (`[-]`, `[DEL-START]`, `[DEL-END]`): share of characters with a cancelled error in the training text.
+CANCEL_RATE = 0.05  #@param {type:"slider", min:0, max:0.2, step:0.01}
 SEARCH_MODEL_SETTINGS = True  #@param {type:"boolean"}
 SEARCH_TRIALS = 20  #@param {type:"integer"}
 #@markdown **Digit keys** (all codes made of digits, e.g. `12`, `03`, `5^.7`): with `auto`, the model reads digit by digit and finds where each code starts, so ciphertexts can be written as running digits. `off` trains on whole codes.
@@ -165,9 +169,16 @@ def custom_plaintext_documents():
     return None
 
 
+def custom_edit_training_text(text):
+    """One training plaintext as a string, before it is enciphered (with ChronoFidelius).
+    Return the edited text, e.g. text.replace("QU", "Q") to imitate an abbreviation habit."""
+    return text
+
+
 def custom_edit_training_units(units):
-    """The whole training text as a list of key units, e.g. ['D', 'E', 'R', ' ', 'SCH', ...].
-    Return the edited list; every unit must exist in the key (special: ' ', '<NULL>', '<DOUBLE>')."""
+    """The whole training text as a list of key units after enciphering, e.g. ['D', 'E', 'R', 'SCH', ...].
+    Return the edited list; every unit must exist in the key (special: ' ', '<NULL>', '<DOUBLE>').
+    Units you change or add get a new symbol from the key."""
     return units
 
 
@@ -215,6 +226,7 @@ settings = TrainSettings(
     letter_replacements=LETTER_REPLACEMENTS, word_spaces=WORD_SPACES,
     training_examples=TRAINING_EXAMPLES, sequence_length=SEQUENCE_LENGTH,
     null_rate=NULL_RATE, double_rate=DOUBLE_RATE, rare_unit_rate=RARE_UNIT_RATE,
+    multi_char_rate=MULTI_CHAR_RATE, cancel_rate=CANCEL_RATE,
     search_trials=SEARCH_TRIALS if SEARCH_MODEL_SETTINGS else 0, seed=SEED, digit_mode=DIGIT_MODE)
 replacements = parse_replacements(LETTER_REPLACEMENTS)
 heldout = None
@@ -232,7 +244,8 @@ else:
     train_chars, heldout_chars = plaintext_chars_needed(TRAINING_EXAMPLES, SEQUENCE_LENGTH)
     documents = load_builtin_plaintext(language, replacements, train_chars, "train")
     heldout = load_builtin_plaintext(language, replacements, heldout_chars, "validation")
-data = prepare_data(key, documents, settings, custom_edit=custom_edit_training_units, heldout_documents=heldout)
+data = prepare_data(key, documents, settings, custom_edit=custom_edit_training_units, heldout_documents=heldout,
+                    custom_edit_text=custom_edit_training_text)
 '''),
 code(r'''
 #@title ⑦ Train the model  { display-mode: "form" }

@@ -3,17 +3,20 @@
 Key files are tab-separated (.tsv). Every plaintext entry and every cipher symbol is
 written in double quotes, so spaces and punctuation are always unambiguous:
 
-    plaintext	ciphertext	whole_word
+    plaintext	ciphertext
     "A"	"J"	"/"
     "SCH"	"Y"
-    "Austria"	"z"	yes
+    "[A|IT|L]"	"51"
     <SPACE>	" "
     <NULL>	"w"	"7"	"u"
 
 - Column 1: what the symbol(s) mean, in quotes, or one of <SPACE>, <NULL>, <DOUBLE>.
 - Then one or more cipher symbols, each in its own quotes. A blank space as a symbol is " ".
   A quote mark inside a symbol is written \" and a backslash \\.
-- Optionally, the word yes (no quotes) at the end: the unit only stands for whole words.
+- A unit written [A|B] has more than one reading (the key does not say which, or the code is
+  polyphonic); in training each reading in the plaintext can come out as this unit's symbols.
+- Every unit matches anywhere in the plaintext. An old "whole word" mark (the word yes at the end
+  of a line) is still accepted but has no effect.
 - Lines starting with # are notes. An unquoted header line starting with "plaintext" is skipped.
 Tabs separate the columns, but spaces between quoted items are tolerated too.
 """
@@ -27,6 +30,7 @@ from .common import (BLANK_SYMBOL, DOUBLE_UNIT, NULL_UNIT, ONE_CHAR, SPACE_UNIT,
 TOKEN = re.compile(r'"((?:[^"\\]|\\.)*)"|(<[A-Za-z]+>)|(\S+)')
 WHOLE_WORD_WORDS = {"yes", "y", "ja", "true", "whole_word", "word"}
 SPECIAL_NAME_FOR_UNIT = {v: k for k, v in SPECIAL_UNIT_NAMES.items()}
+QUOTED_SPECIALS = []   # line numbers of special entries written in quotes, found by the last _parse_tsv
 
 
 def _unescape(s):
@@ -82,20 +86,23 @@ class CipherKey:
         multi = sorted(u for u in self.letter_units if len(u) > 1)
         if multi:
             lines.append(f"Multi-letter units / nomenclature ({len(multi)}): " + ", ".join(multi))
+        multi_reading = sorted(u for u in self.letter_units if len(u) > 2 and u.startswith("[") and "|" in u)
+        if multi_reading:
+            lines.append(f"Units with more than one reading ({len(multi_reading)}), e.g. "
+                         + ", ".join(multi_reading[:8]) + (" ..." if len(multi_reading) > 8 else ""))
         if self.whole_word:
-            lines.append("Whole-word only: " + ", ".join(sorted(self.whole_word)))
+            lines.append("Note: the key marks some units as whole-word only; this is ignored (every unit "
+                         "matches anywhere): " + ", ".join(sorted(self.whole_word)[:10]))
         if self.blank_converted:
             lines.append(f'The blank symbol " " is written as "{BLANK_SYMBOL}" (standard format).')
         return "\n".join(lines)
 
     def write_tsv(self, path):
         with open(path, "w", encoding="utf-8") as f:
-            f.write("plaintext\tciphertext\twhole_word\n")
+            f.write("plaintext\tciphertext\n")
             for u, syms in self.units.items():
                 first = SPECIAL_NAME_FOR_UNIT.get(u) or f'"{_escape(u)}"'
                 cells = [first] + [f'"{_escape(s)}"' for s in syms]
-                if u in self.whole_word:
-                    cells.append("yes")
                 f.write("\t".join(cells) + "\n")
 
 
@@ -108,6 +115,7 @@ def _normalise_unit(text):
 def _parse_tsv(text):
     """Returns (rows, errors); each row is (line_no, unit, [symbols], whole_word)."""
     rows, errors = [], []
+    del QUOTED_SPECIALS[:]
     for no, line in enumerate(text.splitlines(), 1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
@@ -120,7 +128,12 @@ def _parse_tsv(text):
             if raw_unit == "":
                 errors.append(f"Line {no}: the plaintext is empty (\"\").")
                 continue
-            unit = _normalise_unit(raw_unit)
+            if raw_unit.strip().upper() in SPECIAL_UNIT_NAMES:
+                # "<SPACE>" in quotes is almost certainly meant as the special entry <SPACE>
+                unit = SPECIAL_UNIT_NAMES[raw_unit.strip().upper()]
+                QUOTED_SPECIALS.append(no)
+            else:
+                unit = _normalise_unit(raw_unit)
         elif first.group(2) is not None:
             name = first.group(2).upper()
             if name not in SPECIAL_UNIT_NAMES:
@@ -198,6 +211,9 @@ def load_key(path, symbol_format=None):
         rows = [(no, u, [BLANK_SYMBOL if s == " " else s for s in syms], w) for no, u, syms, w in rows]
 
     units, whole_word, warnings, owner = {}, set(), [], {}
+    if ext != ".json" and QUOTED_SPECIALS:
+        warnings.append("Line(s) " + ", ".join(map(str, QUOTED_SPECIALS)) + ": a special entry is written in "
+                        "quotes (e.g. \"<SPACE>\"); it is read as the special entry. Write it without quotes.")
     for no, unit, symbols, whole in rows:
         if whole:
             whole_word.add(unit)

@@ -46,14 +46,16 @@ def evaluate(model, checkpoint, numbered_lines, gold_key=None, exclude_unknown=F
         y_true += t_line
         y_pred += p_line
 
+    from .data import options_match
     n = len(y_true)
     acc = sum(a == b for a, b in zip(y_true, y_pred)) / max(1, n)
+    acc_opt = sum(options_match(a, b) for a, b in zip(y_true, y_pred)) / max(1, n)
     f1w, f1m = _f1(y_true, y_pred)
     line_acc = sorted(l["accuracy"] for l in per_line)
     result = {
         "positions_scored": n,
         "lines_scored": len(per_line),
-        "accuracy": acc, "f1_weighted": f1w, "f1_macro": f1m,
+        "accuracy": acc, "accuracy_option_aware": acc_opt, "f1_weighted": f1w, "f1_macro": f1m,
         "median_line_accuracy": line_acc[len(line_acc) // 2] if line_acc else None,
         "lines_fully_correct": sum(a == 1.0 for a in line_acc) / max(1, len(line_acc)),
         "lines_at_least_95": sum(a >= 0.95 for a in line_acc) / max(1, len(line_acc)),
@@ -108,6 +110,9 @@ def describe(result, units, log=print, top=15):
     say(log, f"  Accuracy:      {_pct(result['accuracy'])}"
              + (f"   95% CI [{ci[0]:.3f}, {ci[1]:.3f}]" if ci else ""))
     say(log, f"  F1 (macro):    {_pct(result['f1_macro'])}")
+    if result.get("accuracy_option_aware") is not None and result["accuracy_option_aware"] != result["accuracy"]:
+        say(log, f"  Accuracy, option-aware: {_pct(result['accuracy_option_aware'])}   "
+                 "(a reading counts as right when it shares an option with the reference, e.g. [REY|REG] and REG)")
     say(log, f"  Lines fully correct: {result['lines_fully_correct']:.1%}   "
              f"lines ≥95% correct: {result['lines_at_least_95']:.1%}   "
              f"median line accuracy: {_pct(result['median_line_accuracy'])}")
@@ -170,6 +175,27 @@ def _letters_only(text):
     return "".join(c for c in text.upper() if c.isalpha())
 
 
+def readable_best(units, reference, norm):
+    """Like data.readable, but for each [A|B] unit the option that best fits the reference line is used
+    (greedy, left to right). The unit as written is also a candidate, for references that list the
+    options themselves (e.g. 'altra/altro'). norm: _as_written or _letters_only."""
+    from .data import readable, unit_options
+    ref = norm(reference)
+    out = list(units)
+    for i, u in enumerate(units):
+        opts = [o for o in unit_options(u) if o not in ("?", "-")] if u.startswith("[") and "|" in u else None
+        if not opts:
+            continue
+        best, best_d = opts[0], None
+        for o in opts + [u]:
+            # the whole line: options already chosen, this candidate, the rest as read
+            d = _edit_distance(norm(readable(out[:i] + [o] + out[i + 1:])), ref)
+            if best_d is None or d < best_d:
+                best, best_d = o, d
+        out[i] = best
+    return readable(out)
+
+
 def read_reference_plaintext(path, skip_prefixes=("##",)):
     """The archive's plaintext transcription: one line per ciphertext line, same order."""
     from .common import read_text_file
@@ -201,7 +227,8 @@ def reference_check(readings, key, reference_lines):
              "one of the files has.")
     rows = []
     totals = {k: 0 for k in ("ref_written", "ref_letters", "key_written", "key_letters",
-                             "model_written", "model_letters")}
+                             "model_written", "model_letters", "key_written_opt", "key_letters_opt",
+                             "model_written_opt", "model_letters_opt")}
     identical = {"key_written": 0, "key_letters": 0}
     for line_no, ref in zip(order, reference_lines):
         key_text, model_text = readable(gold_units[line_no]), readable(pred_units[line_no])
@@ -210,10 +237,17 @@ def reference_check(readings, key, reference_lines):
         mw, ml = _as_written(model_text), _letters_only(model_text)
         d = {"key_written": _edit_distance(kw, rw), "key_letters": _edit_distance(kl, rl),
              "model_written": _edit_distance(mw, rw), "model_letters": _edit_distance(ml, rl)}
+        # option-aware: each [A|B] unit read as the option that best fits the reference line
+        d_opt = {"key_written_opt": _edit_distance(_as_written(readable_best(gold_units[line_no], ref, _as_written)), rw),
+                 "key_letters_opt": _edit_distance(_letters_only(readable_best(gold_units[line_no], ref, _letters_only)), rl),
+                 "model_written_opt": _edit_distance(_as_written(readable_best(pred_units[line_no], ref, _as_written)), rw),
+                 "model_letters_opt": _edit_distance(_letters_only(readable_best(pred_units[line_no], ref, _letters_only)), rl)}
         totals["ref_written"] += len(rw)
         totals["ref_letters"] += len(rl)
         for k in d:
             totals[k] += d[k]
+        for k in d_opt:
+            totals[k] += d_opt[k]
         identical["key_written"] += d["key_written"] == 0
         identical["key_letters"] += d["key_letters"] == 0
         rows.append({"line": line_no, "reference": ref, "key_decoded": key_text, "model": model_text, **d})
@@ -226,6 +260,10 @@ def reference_check(readings, key, reference_lines):
         "key_vs_reference_identical_lines_letters_only": identical["key_letters"] / max(1, n),
         "model_vs_reference_cer_as_written": totals["model_written"] / max(1, totals["ref_written"]),
         "model_vs_reference_cer_letters_only": totals["model_letters"] / max(1, totals["ref_letters"]),
+        "key_vs_reference_cer_as_written_option_aware": totals["key_written_opt"] / max(1, totals["ref_written"]),
+        "key_vs_reference_cer_letters_only_option_aware": totals["key_letters_opt"] / max(1, totals["ref_letters"]),
+        "model_vs_reference_cer_as_written_option_aware": totals["model_written_opt"] / max(1, totals["ref_written"]),
+        "model_vs_reference_cer_letters_only_option_aware": totals["model_letters_opt"] / max(1, totals["ref_letters"]),
     }
     return summary, rows
 
@@ -240,6 +278,12 @@ def describe_reference_check(summary, log=print):
     say(log, "  Model reading vs archive plaintext:")
     say(log, f"    character error rate: {summary['model_vs_reference_cer_as_written']:.2%} as written, "
              f"{summary['model_vs_reference_cer_letters_only']:.2%} letters only")
+    if "model_vs_reference_cer_as_written_option_aware" in summary:
+        say(log, "  Option-aware (each [A|B] reading taken as the option, or both, that best fits the archive line):")
+        say(log, f"    key-decoded: {summary['key_vs_reference_cer_as_written_option_aware']:.2%} as written, "
+                 f"{summary['key_vs_reference_cer_letters_only_option_aware']:.2%} letters only")
+        say(log, f"    model:       {summary['model_vs_reference_cer_as_written_option_aware']:.2%} as written, "
+                 f"{summary['model_vs_reference_cer_letters_only_option_aware']:.2%} letters only")
     say(log, "  ('as written' compares upper-cased text with spacing normalised; 'letters only' ignores\n"
              "   spaces, punctuation and other non-letters.)")
 
@@ -349,7 +393,10 @@ def evaluate_digits(model, checkpoint, numbered_lines, gold_key=None, exclude_un
             n_w += len(gw)
             e_l += _edit_distance(gl_, pl_)
             n_l += len(gl_)
+        from .data import options_match
         r = {"accuracy": sum(a == b for a, b in zip(yt, yp)) / max(1, len(yt)),
+             "accuracy_option_aware": sum(a == b if JOIN_UNIT in (a, b) else options_match(a, b)
+                                          for a, b in zip(yt, yp)) / max(1, len(yt)),
              "f1_weighted": f1w, "f1_macro": f1m,
              "split_accuracy": sum(a == b for a, b in zip(st_t, st_p)) / max(1, len(st_t)),
              "split_f1": 2 * tp / max(1, 2 * tp + fp + fn),
@@ -416,7 +463,7 @@ def describe_digits(result, units, log=print, top=15):
              f"{result['lines']} lines. {result['codes_not_in_key']} codes are not in the key and are not scored.")
     say(log, "The model reads the digits without the spaces, so it has to find the codes itself.")
     say(log, f"'Hard spots' = digits where a code could also be read as shorter codes ({result['hard_spot_digits']:,} digits).\n")
-    rows = [("accuracy", "digit label accuracy"), ("f1_weighted", "F1 (weighted)"), ("f1_macro", "F1 (macro)"),
+    rows = [("accuracy", "digit label accuracy"), ("accuracy_option_aware", "  option-aware"), ("f1_weighted", "F1 (weighted)"), ("f1_macro", "F1 (macro)"),
             ("split_accuracy", "split accuracy"), ("split_f1", "split F1"),
             ("codes_fully_right", "codes fully right"), ("hard_spot_accuracy", "hard spots"),
             ("cer_as_written", "CER as written"), ("cer_letters_only", "CER letters only"),

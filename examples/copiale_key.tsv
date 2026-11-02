@@ -1,6 +1,6 @@
 # Copiale cipher key (DECODE ID 2). Transcription format: symbols separated by spaces.
 # eM and eN share the symbol "uu" in the original key; only EN is listed here.
-plaintext	ciphertext	whole_word
+plaintext	ciphertext
 <SPACE>	"a"	"b"	"c"	"ds"	"e"	"f"	"ft"	"gs"	"h"	"i"	"k"	"l"	"m"	"n"	"o"	"p"	"q"	"r"	"s"	"longs"	"t"	"u"	"v"	"w"	"x"	"y"	"zs"
 "A"	"p."	"n."	"h."
 "Ä"	"fem"
@@ -37,16 +37,16 @@ plaintext	ciphertext	whole_word
 "Y"	"inf"
 "Z"	"s."
 <DOUBLE>	":"
-"MASTER"	"nee"	yes
-"LODGE"	"tri.."	yes
-"SOCIETY"	"o.."	yes
-"OCULIST"	"lip"	yes
-"SECRET"	"star"	yes
-"FREEMASON"	"bigx"	yes
-"TABLE"	"gate"	yes
-"POWER"	"toe"	yes
-"POSITION OF FEET"	"bigl"	yes
-"GOD"	"sci"	yes
+"MASTER"	"nee"
+"LODGE"	"tri.."
+"SOCIETY"	"o.."
+"OCULIST"	"lip"
+"SECRET"	"star"
+"FREEMASON"	"bigx"
+"TABLE"	"gate"
+"POWER"	"toe"
+"POSITION OF FEET"	"bigl"
+"GOD"	"sci"
 "?"	"tribig"
 ":)"	"smir"
 "(:"	"smil"

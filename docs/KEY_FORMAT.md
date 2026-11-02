@@ -8,7 +8,9 @@ A key file tells the tool which cipher symbols stand for which plaintext. It is 
 2. **The plaintext unit comes first, in double quotes.** For example `"A"`, `"SCH"` or `"Austria"`. Upper and lower case are treated the same.
 3. **Then every cipher symbol for that unit, each in its own double quotes,** separated by tabs: `"J"` → `"/"`.
 4. **Write each symbol exactly as it appears in your transcriptions,** including upper and lower case: `"e"` and `"E"` are different symbols.
-5. *Optional:* end the line with the word `yes` (no quotes) if the unit only ever stands for a **whole word**. This is typical of nomenclature.
+5. **A symbol with several readings** (a polyphone) is one unit with the readings in square brackets, separated by a bar: `"[CHE|CHI]"`. When training, the symbol is used for each of its readings; when reading, it is shown as `[CHE|CHI]`.
+
+Every unit matches anywhere in the plaintext, also inside longer words. (Older keys may end a line with the word `yes` to mark a whole-word unit. Since version 1.2 this mark is accepted but ignored.)
 
 Quotes make every character visible, so a blank space, a full stop or a comma used as a symbol can never be confused with the gaps between columns.
 
@@ -17,13 +19,14 @@ Quotes make every character visible, so a blank space, a full stop or a comma us
 `→` stands for a tab:
 
 ```
-plaintext→ciphertext→whole_word
+plaintext→ciphertext
 "A"→"J"→"/"
 "B"→"T"→"4"
 "E"→"W"→"P"→"q"
 "SCH"→"Y"
 "UND"→"R"
-"Austria"→"z"→yes
+"Austria"→"z"
+"[CHE|CHI]"→"k"
 <SPACE>→"_"
 <NULL>→"w"→"7"→"u"
 ```
@@ -33,7 +36,7 @@ Digit codes work in the same way:
 ```
 "A"→"0675"→"112"→"4770"
 "B"→"0086"
-"THE KING"→"901"→yes
+"THE KING"→"901"
 ```
 
 **Digit keys.** When every symbol of a key is made of digits, and at least one has two or more digits, the model reads ciphertexts digit by digit and finds the codes itself, so transcriptions can be written as running digits (see [Digit ciphers](TRANSCRIPTION_FORMAT.md#digit-ciphers-running-digits)). Marks written with a digit are part of the symbol, e.g. `"12^."` (2 with a dot on top) or `"7^`1"` (7 with an accent, then 1). Write a code and its marks exactly as in the transcriptions; `"02"` and `"2"` are different codes.
@@ -47,6 +50,16 @@ Write these **without quotes** in the plaintext position:
 | `<SPACE>` | The symbol(s) mark the gap between words. |
 | `<NULL>` | The symbol(s) mean nothing (nulls, fillers). |
 | `<DOUBLE>` | The symbol means "repeat the previous letter", as in the Copiale cipher. |
+
+Cancel signs are written in quotes, like ordinary units:
+
+| Entry | Meaning |
+|-------|---------|
+| `"[-]"` | A cancel sign: it cancels a symbol, syllable or word next to it. |
+| `"[DEL-START]"`, `"[DEL-END]"` | Start and end of a cancelled stretch. |
+| `"[DEL-START\|DEL-END]"` | One sign used for both the start and the end. |
+
+In training, cancelled letters are put into the synthetic text with their cancel signs (by ChronoFidelius, at the *Cancel rate*), so the model learns to recognise the signs. The model shows them in the reading; it does not remove what they cancel. `[?]` (reading not known) can also be a unit; the model cannot learn it from plaintext.
 
 These names only appear in the key. Ciphertexts, both the synthetic training texts and your transcriptions, always contain the symbols themselves (e.g. `a`, `w`, `:`). See [how word gaps, nulls and the double sign work](TRANSCRIPTION_FORMAT.md#how-word-gaps-nulls-and-the-double-sign-work).
 
@@ -92,14 +105,12 @@ The tool checks the file and lists every problem with its line number. The usual
 
 ## What keys can and cannot express
 
-Supported: each cipher symbol stands for exactly one thing, whether a letter, a group of letters, a whole word, a word gap, a null or the double-letter sign. For digit keys, codes written as running digits without separators are supported (see above).
+Supported: each cipher symbol stands for one unit of the key, whether a letter, a group of letters, a whole word, a word gap, a null, the double-letter sign, a cancel sign, or several readings written as one unit (`"[CHE|CHI]"`). For digit keys, codes written as running digits without separators are supported (see above).
 
 Not supported:
-- **Symbols with several meanings** (polyphones).
 - **Context-dependent rules**, where a symbol's meaning depends on its position or neighbours.
-- **Cancellation signs** ("ignore the previous symbol").
 - **Other cipher types**: polyalphabetic ciphers, transposition, and codebooks that need more than a symbol-for-unit table.
 
 Python users can imitate some of these with the custom edits described in the guides.
 
-*For programmatic use, a key can also be given as JSON: `{"units": {"A": ["J", "/"], "<SPACE>": ["_"]}, "whole_word": ["AUSTRIA"]}`.*
+*For programmatic use, a key can also be given as JSON: `{"units": {"A": ["J", "/"], "<SPACE>": ["_"]}}`.*

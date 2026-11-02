@@ -10,7 +10,7 @@ You need **Python 3.9 or newer** ([python.org](https://www.python.org/downloads/
 pip install keybridge
 ```
 
-This also installs PyTorch, which is a large download (around 1–3 GB depending on your system). Check that the install worked:
+This also installs [ChronoFidelius](https://pypi.org/project/ChronoFidelius/) (1.3.0 or later), which makes the training data, and PyTorch, which is a large download (around 1–3 GB depending on your system). Check that the install worked:
 
 ```
 keybridge --version
@@ -101,6 +101,8 @@ It writes a `.json` and `.txt` summary, a per-unit table and a per-line table.
 | `--custom-edits my_edits.py` | Normalise the transcription first, e.g. a project's transcription conventions. |
 
 Scores are per cipher symbol, with one plaintext unit per symbol. A nomenclature symbol therefore counts once, not once per letter.
+
+**Polyphones.** When a reading or reference has several options (`[REY|REG]`), the command also reports an *option-aware* accuracy: a symbol counts as right when the two share an option. Against `--reference-plaintext`, option-aware character error rates use, for each such unit, the option that fits the archive line best (or the unit as written, when the archive itself lists the options, e.g. `altra/altro`). For digit models, `<JOIN>` labels must still match exactly.
 
 **Checking the reference.** The reference is the key's reading of the transcription, which can differ from the archive's published plaintext: through spelling normalisation, transcription choices, or errors in the key or transcription. With `--reference-plaintext`, both the reference and the model's reading are compared line by line with the archive plaintext. The command reports:
 - the character error rate (edit distance divided by the length of the archive text);

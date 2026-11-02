@@ -1,5 +1,5 @@
 # Key of three letters by Maximilian II (DECODE IDs 1471, 1412, 1407). Standard format: symbols separated by spaces; the word divider (a blank in the manuscript transcription) is written as "_".
-plaintext	ciphertext	whole_word
+plaintext	ciphertext
 <SPACE>	"_"
 "."	"."
 <NULL>	"w"	"7"	"u"	"v"	"s"	"i"	"l"	"Ä"	"3"	"B"	"k"	"#"	"ä"	"€"
@@ -42,6 +42,6 @@ plaintext	ciphertext	whole_word
 "Ü"	"r"
 "SCH"	"Y"
 "UND"	"R"
-"AUSTRIA"	"z"	yes
-"HUNGARIA"	"O"	yes
-"GERMANIA"	"&"	yes
+"AUSTRIA"	"z"
+"HUNGARIA"	"O"
+"GERMANIA"	"&"

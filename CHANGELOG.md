@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0
+
+**Training data are made with ChronoFidelius.** All synthetic training ciphertext is now enciphered by [ChronoFidelius](https://pypi.org/project/ChronoFidelius/) (1.3.0 or later, installed automatically), the library used to build the HistCiph data. The key is turned into a ChronoFidelius encryption dictionary on the fly; the key format does not change.
+
+- Nulls are inserted by ChronoFidelius (`--null-rate`, as before).
+- **Multi-letter rate** (`--multi-rate`, notebook *Multi-letter rate*, default 0.7): multi-letter units (syllables, words) are used this share of the time and spelled out otherwise.
+- **Cancel signs**: keys may have the units `[-]`, `[DEL-START]`, `[DEL-END]` (or `[DEL-START|DEL-END]`). Cancelled mistakes are put into the training text with these signs by ChronoFidelius (`--cancel-rate`, default 0.05), so the model learns to recognise them.
+- **Polyphones**: a symbol with several readings is one unit, `"[CHE|CHI]"`. It is trained as a possible symbol for each reading and read as `[CHE|CHI]`. Units written with a bare bar (`"CHE|CHI"`) are treated the same way.
+- **Rare-unit insertion works on plaintext without word gaps** (such as the built-in HistCiph texts): units are inserted at random positions instead of at word gaps. Before, almost nothing was inserted into such texts.
+- **Whole-word units are gone**: every unit matches anywhere. The old `yes` mark in keys is accepted but ignored, and the key summary says so.
+- New custom edit `custom_edit_training_text(text)` (notebook step ③, `--custom-edits`), applied to each plaintext document before enciphering.
+- A special entry written in quotes (`"<SPACE>"`) is now read as the special entry, with a warning; before, it was taken as a text unit.
+- `keybridge evaluate`: option-aware accuracy (a reading `[REY|REG]` counts as right when the reference is `REG`), and option-aware character error rates against an archive plaintext (`--reference-plaintext`).
+
+Models trained with earlier versions load and read as before. Models trained with 1.2.0 can differ from earlier ones trained with the same seed, because the training data are made differently.
+
 ## 1.1.0
 
 **Digit ciphers written as running digits.** For keys whose codes are all made of digits (with optional marks written with a digit, such as `^.` for a dot on top), keybridge now reads ciphertexts digit by digit and the model finds where each code starts. Transcriptions of such ciphers can be written as running digits, as in the manuscripts, without knowing the code boundaries.

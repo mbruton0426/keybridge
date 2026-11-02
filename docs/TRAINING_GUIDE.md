@@ -77,7 +77,7 @@ Notes inside lines and uncertain readings must be removed first. Whole note line
 
 ## 4. Plaintext to learn from
 
-The model learns from plaintext that the notebook encrypts with your key. It should be in **the language of your cipher** and, ideally, from a similar period and kind of text.
+The model learns from plaintext that the notebook enciphers with your key, using the [ChronoFidelius](https://pypi.org/project/ChronoFidelius/) library. It should be in **the language of your cipher** and, ideally, from a similar period and kind of text.
 
 - **Built-in plaintext** (the default): historical texts from HistCorp, in **English** (default), Czech, Dutch, French, Hungarian, Icelandic, Italian, Polish, Spanish or Swedish. Choose the language of your cipher under *Plaintext source*. These texts have no spaces or punctuation. If your key has a `<SPACE>` entry, word gaps are therefore inserted at random (see *Word spaces* below).
 - **Your own text:** one or more `.txt` files. You need roughly **325,000 characters (about 130 pages) for the default 5,000 training examples**, about 130,000 for 2,000, and proportionally more for 10,000. Blank lines separate passages. Punctuation is kept only where your key has symbols for it.
@@ -111,7 +111,9 @@ If your plaintext has no word gaps (like the built-in texts), "keep real word bo
 | Sequence length | Plaintext units per training example. 50 works well; roughly the length of a manuscript line is a good choice. For digit keys, an example then has more digits than units (e.g. about 80 digits for 50 units). |
 | Null rate | Share of positions that get a null (only if your key has `<NULL>`). Raise it if your ciphertexts use many nulls. For a digit key whose null digit never occurs inside a code, the share of that digit in the ciphertext is a good guide. |
 | Double rate | Chance that a doubled letter is written with the double-letter sign (only if your key has `<DOUBLE>`). |
-| Rare unit rate | 0.02 by default. Inserts key units that occur fewer than 20 times in the plaintext (nomenclature, punctuation, letters the language lacks) at this rate per word gap ([section 7](#7-rare-units-and-nomenclature)). 0 turns it off. |
+| Rare unit rate | 0.02 by default. Inserts key units that occur fewer than 20 times in the plaintext (nomenclature, punctuation, letters the language lacks) at this rate per word gap, or per position when the plaintext has no word gaps, as in the built-in texts ([section 7](#7-rare-units-and-nomenclature)). 0 turns it off. |
+| Multi-letter rate | 0.7 by default. Share of the time a multi-letter unit of the key (a syllable or word such as `SCH` or `KING`) is used where it fits; the rest of the time the letters are written one by one. Encipherers did not always use these symbols. 1 always uses them. |
+| Cancel rate | Only for keys with cancel signs (`[-]`, `[DEL-START]`, `[DEL-END]`). 0.05 by default (ChronoFidelius's default): share of characters with a cancelled mistake in the training text, written with the key's cancel signs. |
 | Search model settings | On by default: tries 20 model settings (short trials of 10 rounds each, `SEARCH_TRIALS`) on the checking examples and trains the final model with the best. Adds roughly 10–60 minutes depending on training size and GPU. Untick it to use the fixed default settings instead. |
 | Decipher a transcription | Untick if you only want to train a model. |
 | Transcription file | Path to your transcription, or leave empty to upload. |
@@ -160,8 +162,7 @@ The model can only learn a symbol if its meaning appears in the training text. N
 
 What you can do:
 - Use plaintext from the same context as the cipher (similar letters, the same period and topic), so that the words occur naturally.
-- Mark nomenclature with `yes` in the key, so it only matches whole words and not parts of longer words.
-- Keep the *Rare unit rate* on (0.02 by default). It inserts rare units into the training text at random word gaps, so the model sees their symbols. In tests on authentic letters with 5,000 examples, it removed most errors on nomenclature, punctuation and missing letters. Because the units are inserted without real context, the remaining errors are mostly rare units confused with each other.
+- Keep the *Rare unit rate* on (0.02 by default). It inserts rare units into the training text at random word gaps (or at random positions when the plaintext has no word gaps), so the model sees their symbols. In tests on authentic letters with 5,000 examples, it removed most errors on nomenclature, punctuation and missing letters. Because the units are inserted without real context, the remaining errors are mostly rare units confused with each other.
 
 Expect errors around rare units and check them by hand.
 
@@ -203,17 +204,21 @@ Two ways to send it:
 
 ## 10. For Python users
 
-**Custom edits.** Step ③ contains three functions that are called automatically:
+**Custom edits.** Step ③ contains four functions that are called automatically:
 - `custom_plaintext_documents()` can return your own list of plaintext strings to train on (section 4).
-- `custom_edit_training_units(units)` receives the whole training text as a list of key units (e.g. `['D', 'E', 'R', ' ', 'SCH', ...]`). Return an edited list, for example to imitate abbreviation habits. Every unit must exist in the key; the special ones are `' '`, `'<NULL>'` and `'<DOUBLE>'`.
+- `custom_edit_training_text(text)` receives each plaintext document as a string before it is enciphered. Return the edited text, for example to spell words the way your encipherer did.
+- `custom_edit_training_units(units)` receives the whole enciphered training text as a list of key units (e.g. `['D', 'E', 'R', ' ', 'SCH', ...]`). Return an edited list, for example to imitate abbreviation habits. Every unit must exist in the key; the special ones are `' '`, `'<NULL>'` and `'<DOUBLE>'`. Symbols are kept where a unit is unchanged and chosen at random where you changed or added one.
 - `custom_edit_transcription_line(symbols)` receives each transcription line as a list of symbols. Use it to normalise transcription conventions.
 
 The command line accepts the same functions in a Python file: `--custom-edits my_edits.py`.
 
-**How training data are made.** The plaintext is split into key units by greedy longest match, the same rule as `ChronoFidelius.encrypt_homophonic(encryption_dict=...)`, with two differences:
-- whole-word units only match complete words;
-- characters with no key entry are reported and removed, instead of being copied into the ciphertext unchanged.
+**How training data are made.** Since version 1.2, all training ciphertext is made by ChronoFidelius (1.3.0 or later), so the data match the HistCiph experiments. The key is turned into a ChronoFidelius encryption dictionary on the fly; the key file format does not change.
+1. `custom_edit_training_text` is applied. Word gaps are kept, inserted at random or removed (section 4); doubled letters get the double-letter sign at the *Double rate*; rare units are inserted at the *Rare unit rate*.
+2. `ChronoFidelius.encrypt_homophonic` enciphers the text: greedy longest match, a random symbol for each unit, multi-letter units used at the *Multi-letter rate*, nulls at the *Null rate*, and, for keys with cancel signs, cancelled mistakes at the *Cancel rate*. Characters with no key entry are reported and removed.
+3. Each symbol is labelled with its unit in the key, `custom_edit_training_units` is applied, and the stream is cut into examples.
 
-Word gaps, double-letter signs, nulls and custom edits are then applied, the text is cut into examples, and each unit is replaced by one of its symbols at random. Input and target are aligned **one cipher symbol to one plaintext unit**, so multi-letter units and nomenclature are single targets.
+Input and target are aligned **one cipher symbol to one plaintext unit**, so multi-letter units, nomenclature and polyphones are single targets. A polyphone such as `[CHE|CHI]` is a possible symbol for each of its readings, and its label is always `[CHE|CHI]`.
+
+**Scoring polyphones.** `keybridge evaluate` also reports an *option-aware* accuracy: a reading such as `[REY|REG]` counts as right when the reference is one of its options (`REG`). Against an archive plaintext, the character error rate is likewise computed with the best-fitting option on each line (or both options, when the archive lists both).
 
 **Saved models** (`.pt`) are self-contained: 16-bit weights, hyperparameters, input and output vocabularies, the key, settings and metrics. Load one with `keybridge.model.load_model(path)`.

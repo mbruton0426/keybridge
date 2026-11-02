@@ -25,14 +25,15 @@ from .common import StopHere, resolve_format, safe_name
 from .config import PLAINTEXT_DATASETS
 
 
-def _load_custom_edits(path):
+def _load_custom_edits(path, with_text=False):
+    """custom_edit_training_units, custom_edit_transcription_line (and custom_edit_training_text)."""
     if not path:
-        return None, None
+        return (None, None, None) if with_text else (None, None)
     spec = importlib.util.spec_from_file_location("custom_edits", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return (getattr(mod, "custom_edit_training_units", None),
-            getattr(mod, "custom_edit_transcription_line", None))
+    out = (getattr(mod, "custom_edit_training_units", None), getattr(mod, "custom_edit_transcription_line", None))
+    return out + (getattr(mod, "custom_edit_training_text", None),) if with_text else out
 
 
 def cmd_train(a):
@@ -51,9 +52,10 @@ def cmd_train(a):
                       letter_replacements=a.replacements, word_spaces=a.word_spaces,
                       training_examples=a.examples, sequence_length=a.length, null_rate=a.null_rate,
                       double_rate=a.double_rate, rare_unit_rate=a.rare_rate,
+                      multi_char_rate=a.multi_rate, cancel_rate=a.cancel_rate,
                       search_trials=a.search_trials, seed=a.seed, max_epochs=a.max_epochs,
                       digit_mode=a.digit_mode)
-    train_edit, line_edit = _load_custom_edits(a.custom_edits)
+    train_edit, line_edit, text_edit = _load_custom_edits(a.custom_edits, with_text=True)
     key = load_key(a.key, fmt)
     print(key.summary())
     for w in key.warnings:
@@ -70,7 +72,7 @@ def cmd_train(a):
         train_chars, heldout_chars = plaintext_chars_needed(a.examples, a.length)
         docs = load_builtin_plaintext(lang, reps, train_chars, "train")
         heldout = load_builtin_plaintext(lang, reps, heldout_chars, "validation")
-    data = prepare_data(key, docs, s, custom_edit=train_edit, heldout_documents=heldout)
+    data = prepare_data(key, docs, s, custom_edit=train_edit, heldout_documents=heldout, custom_edit_text=text_edit)
     result = train(key, data, s)
     out_dir = os.path.join(a.out, name)
     model_path = save_training_outputs(out_dir, s, key, a.key, data, result)
@@ -265,7 +267,13 @@ def main(argv=None):
     t.add_argument("--null-rate", type=float, default=0.05)
     t.add_argument("--double-rate", type=float, default=0.5)
     t.add_argument("--rare-rate", type=float, default=0.02,
-                   help="insert key units that are rare or missing in the plaintext at this rate per word gap (default 0.02; 0 = off)")
+                   help="insert key units that are rare or missing in the plaintext at this rate (per word gap, or per "
+                        "position when the plaintext has no word gaps, as in HistCiph; default 0.02; 0 = off)")
+    t.add_argument("--multi-rate", type=float, default=0.7,
+                   help="share of the time a multi-letter unit (syllable, word) is used; otherwise it is spelled out (default 0.7)")
+    t.add_argument("--cancel-rate", type=float, default=0.05,
+                   help="keys with cancel signs ([-], [DEL-START], [DEL-END]): share of characters with a cancelled "
+                        "error in the training text (default 0.05, ChronoFidelius's default)")
     t.add_argument("--search-trials", type=int, default=20,
                    help="short trials of the model-settings search (default 20; 0 = skip the search and use the fixed default settings)")
     t.add_argument("--seed", type=int, default=9)
@@ -277,7 +285,7 @@ def main(argv=None):
                    help="digit models: treat spaces in the transcription as code boundaries")
     t.add_argument("--transcription", help="also read this transcription after training")
     t.add_argument("--skip", default="##", help="skip transcription lines starting with these (comma-separated)")
-    t.add_argument("--custom-edits", help="Python file defining custom_edit_training_units / custom_edit_transcription_line")
+    t.add_argument("--custom-edits", help="Python file defining custom_edit_training_text / custom_edit_training_units / custom_edit_transcription_line")
     t.add_argument("--out", default="outputs")
     t.set_defaults(func=cmd_train)
 

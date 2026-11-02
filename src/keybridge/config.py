@@ -1,9 +1,3 @@
-"""Names and addresses that the maintainer sets once.
-
-Every value marked PLACEHOLDER must be replaced when the GitHub and Hugging Face
-repositories exist. See docs/MAINTAINER_SETUP.md for the full list.
-"""
-
 # GitHub repository holding this code (owner/name).
 GITHUB_REPO = "mbruton0426/keybridge"
 

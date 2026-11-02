@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass, field
 from . import __version__
 from .common import (DOUBLE_UNIT, JOIN_UNIT, NULL_UNIT, SPACE_SEPARATED, SPACE_UNIT, SPECIAL_TOKENS, UNK,
                      say, stop)
-from .data import (build_unit_stream, chunk, describe_coverage, encrypt, make_dataset, make_vocab,
+from .data import (build_examples, chunk_pairs, describe_coverage, encrypt, make_dataset, make_vocab,
                    readable)
 from .digits import expand, info_of, piece_regex, read_digit_lines, read_stream, resolve_digit_mode
 from .keys import scrambled_key
@@ -32,6 +32,8 @@ class TrainSettings:
     null_rate: float = 0.05
     double_rate: float = 0.5
     rare_unit_rate: float = 0.02
+    multi_char_rate: float = 0.7      # multi-letter units (syllables, words) are used 7 times in 10, spelled out otherwise
+    cancel_rate: float = 0.05         # keys with cancel signs: share of characters with a cancelled error (ChronoFidelius default)
     search_trials: int = 20
     seed: int = 9
     max_epochs: int = 100
@@ -52,27 +54,33 @@ def plaintext_chars_needed(training_examples, sequence_length):
     return int(training_examples * sequence_length * 1.3), int((n_val + n_test) * sequence_length * 1.5)
 
 
-def _units_to_chunks(documents, key, s, rng, custom_edit):
-    stream, report = build_unit_stream(documents, key, rng, word_spaces=s.word_spaces,
-                                       null_rate=s.null_rate, double_rate=s.double_rate,
-                                       rare_unit_rate=s.rare_unit_rate, custom_edit=custom_edit)
-    chunks = chunk(stream, s.sequence_length)
+def _make_chunks(documents, key, s, rng, custom_edit, custom_edit_text, seed, rare_units=None):
+    codes, units, report = build_examples(documents, key, rng, seed, word_spaces=s.word_spaces,
+                                          null_rate=s.null_rate, double_rate=s.double_rate,
+                                          rare_unit_rate=s.rare_unit_rate, multi_char_rate=s.multi_char_rate,
+                                          cancel_rate=s.cancel_rate, custom_edit=custom_edit,
+                                          custom_edit_text=custom_edit_text, rare_units=rare_units)
+    chunks = chunk_pairs(codes, units, s.sequence_length)
     rng.shuffle(chunks)
     return chunks, report
 
 
-def prepare_data(key, documents, s: TrainSettings, custom_edit=None, heldout_documents=None, log=print):
+def prepare_data(key, documents, s: TrainSettings, custom_edit=None, heldout_documents=None, log=print,
+                 custom_edit_text=None):
     """documents: plaintext strings to train on. heldout_documents (optional): separate plaintext
     for the checking and test examples, e.g. a dataset's validation split. Without it, checking
-    and test examples are taken from `documents` (never overlapping the training examples)."""
+    and test examples are taken from `documents` (never overlapping the training examples).
+    The examples are enciphered with ChronoFidelius (see data.build_examples).
+    custom_edit: custom_edit_training_units(units); custom_edit_text: custom_edit_training_text(text)."""
     rng = random.Random(s.seed)
-    chunks, report = _units_to_chunks(documents, key, s, rng, custom_edit)
+    chunks, report = _make_chunks(documents, key, s, rng, custom_edit, custom_edit_text, s.seed)
+    rare = report.get("rare_units")
     n_val, n_test = heldout_sizes(s.training_examples)
     if heldout_documents:
-        held, _ = _units_to_chunks(heldout_documents, key, s, rng, custom_edit)
+        held, _ = _make_chunks(heldout_documents, key, s, rng, custom_edit, custom_edit_text, s.seed + 7919, rare)
         if len(held) < n_val + n_test:
             stop(f"The held-out plaintext gave only {len(held)} examples; {n_val + n_test} are needed.")
-        val_u, test_u, pool = held[:n_val], held[n_val:n_val + n_test], chunks
+        val_c, test_c, pool = held[:n_val], held[n_val:n_val + n_test], chunks
         if len(pool) < 200:
             stop(f"The plaintext is too short: it gave {len(pool)} training examples of {s.sequence_length} "
                  "symbols, but at least 200 are needed.")
@@ -81,12 +89,16 @@ def prepare_data(key, documents, s: TrainSettings, custom_edit=None, heldout_doc
             stop(f"The plaintext is too short: it gave {len(chunks)} examples of {s.sequence_length} symbols, "
                  f"but at least {n_val + n_test + 200} are needed.\nPlease provide more text "
                  f"(aim for about {s.training_examples * s.sequence_length * 1.3:,.0f} characters).")
-        val_u, test_u, pool = chunks[:n_val], chunks[n_val:n_val + n_test], chunks[n_val + n_test:]
-    train_u = [pool[i % len(pool)] for i in range(s.training_examples)]
+        val_c, test_c, pool = chunks[:n_val], chunks[n_val:n_val + n_test], chunks[n_val + n_test:]
+    distinct = len(pool)
+    # Not enough plaintext for the requested number of examples: the same examples are used again with
+    # newly chosen symbols for each unit (nulls, errors and the choice of units stay as ChronoFidelius made them).
+    train_c = [pool[i] if i < distinct else (encrypt(pool[i % distinct][1], key, rng), pool[i % distinct][1])
+               for i in range(s.training_examples)]
+    train_u, val_u, test_u = [u for _, u in train_c], [u for _, u in val_c], [u for _, u in test_c]
 
     info = resolve_digit_mode(key, s.digit_mode)
-    codes = {name: [encrypt(u, key, rng) for u in units]
-             for name, units in (("train", train_u), ("val", val_u), ("test", test_u))}
+    codes = {"train": [c for c, _ in train_c], "val": [c for c, _ in val_c], "test": [c for c, _ in test_c]}
     units = {"train": train_u, "val": val_u, "test": test_u}
     data = {"train_units": train_u, "val_units": val_u, "test_units": test_u, "rng": rng,
             "test_codes": codes["test"], "digit_info": info}
@@ -112,8 +124,11 @@ def prepare_data(key, documents, s: TrainSettings, custom_edit=None, heldout_doc
 
     say(log, f"Made {len(train_u)} training, {len(val_u)} checking and {len(test_u)} test examples "
              f"of {s.sequence_length} plaintext units each.")
-    if len(pool) < s.training_examples:
-        say(log, f"  Note: the plaintext only gave {len(pool)} distinct training examples, so some text is "
+    say(log, "  Enciphered with ChronoFidelius (nulls, multi-letter units used "
+             f"{s.multi_char_rate:.0%} of the time" + (", cancel signs" if any(u in key.units for u in
+             ("[-]", "[DEL-START]", "[DEL-END]", "[DEL-START|DEL-END]")) and s.cancel_rate > 0 else "") + ").")
+    if distinct < s.training_examples:
+        say(log, f"  Note: the plaintext only gave {distinct} distinct training examples, so some are "
                  "reused with different symbols. More plaintext would be better.")
     data["notes"] = describe_coverage(report, key, log)
     # Key units the training text never contains: the model cannot learn their symbols, so the
