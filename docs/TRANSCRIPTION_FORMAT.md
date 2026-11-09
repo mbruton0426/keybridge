@@ -21,8 +21,9 @@ Because every model is trained in this format, any transcription can be tested a
 3. **Write the cipher symbols exactly as they appear in the key,** including upper and lower case and the spelling of symbol names. The tool matches symbols to the key letter for letter: if the key says `"lam"`, the transcription must say `lam`, not `Lam` or `lambda`.
 4. **A blank used as a cipher symbol is written `_`.** Some ciphers use a gap or blank as a symbol, for example as a word divider (as in the Maximilian letters). Write it as `_`, in the key as `"_"` and in the transcription as `_`.
 5. **No quotes and no special names.** Quotes are only used in the key file. Never write `<SPACE>`, `<NULL>` or `<DOUBLE>` in a transcription; write the symbol the manuscript shows (see [below](#how-word-gaps-nulls-and-the-double-sign-work)).
-6. **Codes of digit keys may be written as running digits.** For keys whose codes are all made of digits, the tool finds the codes itself, so `067547700454` is fine (see [Digit ciphers](#digit-ciphers-running-digits)). For all other keys, separate the symbols.
-7. **Save the file as UTF-8** if your editor asks.
+6. **Write each code of the key as one symbol.** If the key's codes are made of several characters, such as `z19`, `g50` or `m33` (a letter followed by digits), write each code whole: `z19 m23 n25`, not `z 1 9 m 2 3 n 2 5`. Written character by character, none of the symbols matches the key, and the model cannot read them. (Digit keys are the exception: see the next rule.)
+7. **Codes of digit keys may be written as running digits.** For keys whose codes are all made of digits, the tool finds the codes itself, so `067547700454` is fine (see [Digit ciphers](#digit-ciphers-running-digits)). For all other keys, separate the symbols (rule 6).
+8. **Save the file as UTF-8** if your editor asks.
 
 ## Older "one character per symbol" files
 
@@ -33,7 +34,7 @@ Transcriptions in which every character is one symbol, written without spaces be
 
 Likewise, if a key lists a blank `" "` as a cipher symbol, it is automatically treated as `"_"`. `keybridge convert --key my_key.tsv` writes the key in the standard form. If a key uses both `" "` and `"_"` as symbols, the tool stops and asks you to rename the existing `"_"` symbol first, so the two cannot be confused.
 
-**In all outputs, a blank cipher symbol appears as `_`:** in the cipher lines of the decipherment file, and in the per-symbol tables. In the aligned reading, a word gap is shown as `_` (or `<SPACE>` if `_` is a plaintext unit of the key); in the flowing `text:` line it is a normal space.
+**In all outputs, a blank cipher symbol appears as `_`:** in the cipher lines of the decryption file, and in the per-symbol tables. In the aligned reading, a word gap is shown as `_` (or `<SPACE>` if `_` is a plaintext unit of the key); in the flowing `text:` line it is a normal space.
 
 ## Notes, page numbers and uncertain readings
 
@@ -50,7 +51,7 @@ The tool does not change the transcription in any other way. Python users can no
 
 ## Digit ciphers: running digits
 
-Many cipher manuscripts write the codes of a digit key as one running string of digits: `12^.` (M), `7` (F) and `71` (CHE) all appear in `7 1 1 2^.`, and where one code ends and the next begins is only known once the text is deciphered. For such keys, keybridge reads the ciphertext **digit by digit** and the model decides where each code starts. You therefore do not need to know the code boundaries, and should not guess them.
+Many cipher manuscripts write the codes of a digit key as one running string of digits: `12^.` (M), `7` (F) and `71` (CHE) all appear in `7 1 1 2^.`, and where one code ends and the next begins is only known once the text is decrypted. For such keys, keybridge reads the ciphertext **digit by digit** and the model decides where each code starts. You therefore do not need to know the code boundaries, and should not guess them.
 
 This applies automatically to every key whose cipher symbols are all made of digits, with optional marks written with a digit (such as `^.` for a dot on top, `^`` for an accent, `_.` for a dot below), and where at least one code has two or more digits. Keys with letters or named symbols are not affected.
 
@@ -60,13 +61,13 @@ How to write the transcription:
 - **Codes can run over line ends**: the text is read as one stream, and each code is reported on the line where its first digit is.
 - **Characters that are not digits of the key** (`?` for an illegible digit, `|`, notes) are kept as single unknown symbols and shown as `[?]` in the reading. Remove a `?` written after a digit to mark an uncertain reading (`5?` → `5`), or it counts as an extra symbol.
 
-In the decipherment, each code is shown above its reading as the model split it, e.g. `12^.` over `M`. To check a digit model against an archive decryption, see `keybridge evaluate` in [LOCAL_INSTALL.md](LOCAL_INSTALL.md#score-a-reading-against-the-key-research): it uses a transcription with the codes separated.
+In the decryption, each code is shown above its reading as the model split it, e.g. `12^.` over `M`. To check a digit model against an archive decryption, see `keybridge evaluate` in [LOCAL_INSTALL.md](LOCAL_INSTALL.md#score-a-reading-against-the-key-research): it uses a transcription with the codes separated.
 
 ## How word gaps, nulls and the double sign work
 
 A key line lists the plaintext first, then the cipher symbols that encode it: `plaintext → symbol → symbol → …`. The special entries `<SPACE>`, `<NULL>` and `<DOUBLE>` only ever appear in the plaintext position of a key. Ciphertexts never contain them; both the synthetic training ciphertexts and real transcriptions contain only symbols.
 
-| Key line (plaintext → cipher symbols) | Training plaintext (what the model learns to output) | Training ciphertext (what the model reads) | How to write it in a real transcription | In the decipherment |
+| Key line (plaintext → cipher symbols) | Training plaintext (what the model learns to output) | Training ciphertext (what the model reads) | How to write it in a real transcription | In the decryption |
 |---|---|---|---|---|
 | `"E"` → `"ah"` `"eh"` | `E` | `ah` or `eh` | `ah` or `eh`, as in the manuscript | E |
 | `<SPACE>` → `"zs"` `"a"` | a word gap | `zs` or `a` | `zs` or `a` | `_` in the aligned reading, a space in the flowing text |

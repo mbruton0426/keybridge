@@ -2,7 +2,7 @@
 
 The training notebook takes a **substitution cipher key you already know** (simple or homophonic) and trains a small neural network that reads ciphertexts written with that key. It runs in your web browser on Google Colab, so you do not need to install anything or write any code. The same steps can also run on your own computer ([local version](LOCAL_INSTALL.md)).
 
-**It can:** produce a **draft decipherment** of a transcribed ciphertext written with your key, and help you judge **whether a ciphertext was written with your key at all**.
+**It can:** produce a **draft decryption** of a transcribed ciphertext written with your key, and help you judge **whether a ciphertext was written with your key at all**.
 **It cannot:** find an *unknown* key, or replace expert review.
 
 ## Contents
@@ -115,7 +115,7 @@ If your plaintext has no word gaps (like the built-in texts), "keep real word bo
 | Multi-letter rate | 0.7 by default. Share of the time a multi-letter unit of the key (a syllable or word such as `SCH` or `KING`) is used where it fits; the rest of the time the letters are written one by one. Encipherers did not always use these symbols. 1 always uses them. |
 | Cancel rate | Only for keys with cancel signs (`[-]`, `[DEL-START]`, `[DEL-END]`). 0.05 by default (ChronoFidelius's default): share of characters with a cancelled mistake in the training text, written with the key's cancel signs. |
 | Search model settings | On by default: tries 20 model settings (short trials of 10 rounds each, `SEARCH_TRIALS`) on the checking examples and trains the final model with the best. Adds roughly 10–60 minutes depending on training size and GPU. Untick it to use the fixed default settings instead. |
-| Decipher a transcription | Untick if you only want to train a model. |
+| Decrypt a transcription | Untick if you only want to train a model. |
 | Transcription file | Path to your transcription, or leave empty to upload. |
 | Skip lines starting with | Transcription lines to ignore (default `##`; a single `#` is not skipped, since `#` can be a cipher symbol). Several markers can be given, separated by commas. |
 | Save to Google Drive | Also copies all results to *My Drive/cipher_models/your project*. |
@@ -132,13 +132,13 @@ You receive a zip file containing:
 
 | File | Contents |
 |------|----------|
-| `..._decipherment.txt` | Each transcription line with a confidence value, every cipher symbol aligned above its reading, and the flowing text. |
-| `..._decipherment_aligned.csv` | One row per cipher symbol: the symbol, what the model read, how it is shown, its confidence, and a note if the symbol is not in the key or belongs to a unit never seen in training. |
+| `..._decryption.txt` | Each transcription line with a confidence value, every cipher symbol aligned above its reading, and the flowing text. |
+| `..._decryption_aligned.csv` | One row per cipher symbol: the symbol, what the model read, how it is shown, its confidence, and a note if the symbol is not in the key or belongs to a unit never seen in training. |
 | `..._model.pt` | The trained model. Keep it to read further ciphertexts later (notebook ②), or to share it. |
 | `..._training_report.txt` | All settings, warnings and accuracy figures. |
 | `..._key.tsv`, `..._key_as_read.tsv` | Your key, and the key as the tool understood it. |
 
-In the decipherment file, every cipher symbol is aligned above its reading, so the two match one to one:
+In the decryption file, every cipher symbol is aligned above its reading, so the two match one to one:
 
 ```
   cipher: <SPACE>  r  Omega  Psi  f  Mu  LinkSymbol  q  Union  <SPACE>  ,
@@ -173,9 +173,9 @@ Expect errors around rare units and check them by hand.
 If you tick **Share my model**, the notebook prepares your trained model for the public collection, so that others can test their ciphertexts against your key.
 
 **What is shared:** the model, your key, the training report, and a short description with your name, email and the source of the key.
-**What is not shared:** your transcriptions and decipherments.
+**What is not shared:** your transcriptions and decryptions.
 
-A model trained on a key can decipher anything written with that key, so **sharing the model effectively shares the key**. Only share if you have the right to do so, and tick the confirmation box. Shared models are published under the CC BY 4.0 licence.
+A model trained on a key can decrypt anything written with that key, so **sharing the model effectively shares the key**. Only share if you have the right to do so, and tick the confirmation box. Shared models are published under the CC BY 4.0 licence.
 
 Two ways to send it:
 - **Download a bundle to send by email** (default). A zip file downloads; email it to the address the notebook shows. If it is too large to attach, upload it to Google Drive or similar and send a link.
@@ -219,6 +219,6 @@ The command line accepts the same functions in a Python file: `--custom-edits my
 
 Input and target are aligned **one cipher symbol to one plaintext unit**, so multi-letter units, nomenclature and polyphones are single targets. A polyphone such as `[CHE|CHI]` is a possible symbol for each of its readings, and its label is always `[CHE|CHI]`.
 
-**Scoring polyphones.** `keybridge evaluate` also reports an *option-aware* accuracy: a reading such as `[REY|REG]` counts as right when the reference is one of its options (`REG`). Against an archive plaintext, the character error rate is likewise computed with the best-fitting option on each line (or both options, when the archive lists both).
+**Scoring polyphones.** `keybridge evaluate` also reports an *option-aware* accuracy: a reading such as `[REY|REG]` counts as right when the key reference is one of its options (`REG`). Against an archive plaintext, the character error rate is likewise computed with the best-fitting option on each line (or both options, when the archive lists both).
 
 **Saved models** (`.pt`) are self-contained: 16-bit weights, hyperparameters, input and output vocabularies, the key, settings and metrics. Load one with `keybridge.model.load_model(path)`.

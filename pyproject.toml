@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "keybridge"
-version = "1.2.0"
-description = "Shared-space neural decipherment of historical simple and homophonic substitution ciphers"
+version = "1.3.0"
+description = "Neural decryption of historical simple and homophonic substitution ciphers with known keys"
 readme = "README.md"
 license = "MIT AND CC-BY-4.0"  # code: MIT; language profiles, keys and docs: CC BY 4.0
 license-files = ["LICENSE", "LICENSE-CC-BY-4.0.txt"]
 authors = [{name = "Micaella Bruton"}, {name = "Meriem Beloucif"}, {name = "Beáta Megyesi"}]
 requires-python = ">=3.9"
-keywords = ["cryptology", "historical cryptology", "cipher", "decipherment", "homophonic cipher", "substitution cipher", "neural network"]
+keywords = ["cryptology", "historical cryptology", "cipher", "decryption", "decipherment", "homophonic cipher", "substitution cipher", "neural network"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

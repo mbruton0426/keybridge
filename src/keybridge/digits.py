@@ -2,7 +2,7 @@
 
 In many cipher manuscripts the codes of a digit key (e.g. 12, 7, 03, 5^.7) are written as one
 running string of digits, so where one code ends and the next begins is only known once the
-text is deciphered. For such keys the model works on single digits ("pieces"): a digit plus any
+text is decrypted. For such keys the model works on single digits ("pieces"): a digit plus any
 marks written with it, e.g. 2^. (dot on top), 7^` (accent), 8_. (dot below). Each digit is
 labelled with the plaintext unit ("a new code starts here and means E") or <JOIN> ("this digit
 belongs to the code before it").

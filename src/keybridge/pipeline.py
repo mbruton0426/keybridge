@@ -337,7 +337,8 @@ def describe_fit(f, log=print):
         say(log, f"    for comparison, text in scrambled keys: {f['ref_scrambled']:6.1%}")
     say(log, "  The most reliable test is to read the output: text written with this key comes out mostly\n"
              "  readable, while text from another key comes out as nonsense or repeated letters. The\n"
-             "  figures above are a rough guide only and have not yet been validated on real ciphers.")
+             "  figures above are a rough guide only: on real letters, with nomenclature and transcription\n"
+             "  variants, they can be low even with the right key.")
     if f["unknown_share"] > 0.10:
         say(log, "\n  Many symbols are not in the key. Check that the transcription writes symbols exactly\n"
                  "  as the key does, and that the transcription format is right.")
@@ -421,13 +422,13 @@ def _aligned_rows(entries, width=READING_WIDTH):
 
 
 def write_reading(out_dir, name, readings, symbol_format, title, checkpoint=None):
-    """Writes <name>_decipherment.txt (each cipher symbol aligned above its reading, plus the
-    flowing text) and <name>_decipherment_aligned.csv; returns both paths. With `checkpoint`
+    """Writes <name>_decryption.txt (each cipher symbol aligned above its reading, plus the
+    flowing text) and <name>_decryption_aligned.csv; returns both paths. With `checkpoint`
     (the model's key and metrics), symbols not in the key or of units never seen in training are
     shown as [symbol] instead of the model's guess (the guess stays in the CSV)."""
     os.makedirs(out_dir, exist_ok=True)
-    txt = os.path.join(out_dir, f"{name}_decipherment.txt")
-    tab = os.path.join(out_dir, f"{name}_decipherment_aligned.csv")
+    txt = os.path.join(out_dir, f"{name}_decryption.txt")
+    tab = os.path.join(out_dir, f"{name}_decryption_aligned.csv")
     m = reading_markers(list(checkpoint["key"]["units"]) if checkpoint else [])
     unk = "[symbol]" if m["bracketed"] else "<?symbol>"
     legend = (f"Each cipher symbol is shown above its reading. {m['space']} = word gap, {m['null']} = null, "
@@ -463,5 +464,4 @@ def preview(readings, n=12, log=print):
         conf = sum(r["confidence"]) / max(1, len(r["confidence"]))
         say(log, f"  [{r['line']:>4}] ({conf:.2f})  {readable(r['units'])}")
     if len(readings) > n:
-        say(log, f"  ... {len(readings) - n} more lines in the decipherment file.")
-
+        say(log, f"  ... {len(readings) - n} more lines in the decryption file.")

@@ -72,7 +72,8 @@ keybridge scan --transcription letter.txt --format char --models all
 | `--languages de,la,it` | Limit language scoring. |
 | `--margin 0.05`, `--max-close 3` | Which results count as top results. |
 | `--min-coverage 0.75` | Skip models whose key contains less than this share of your symbols. `0` tests every model. |
-| `--all-outputs` | Write a decipherment for every model. |
+| `--write-top 10` | Write draft decryptions for this many of the best-ranked models (default 10). |
+| `--all-outputs` | Write a decryption for every model. |
 
 The ranking is printed and written to `outputs/<transcription>_ranking.txt` and `.csv`. How the scores work is explained in [READING_AND_SCANNING_GUIDE.md](READING_AND_SCANNING_GUIDE.md#how-models-are-ranked).
 
@@ -82,20 +83,21 @@ The ranking is printed and written to `outputs/<transcription>_ranking.txt` and 
 keybridge evaluate --model my_cipher_model.pt --transcription letter.txt
 ```
 
-For checking a model on an authentic ciphertext whose key is known, as in the paper's experiments. The reference for each symbol is the plaintext unit the key gives it (the transcription decoded with the key). The command reports:
+For checking a model on an authentic ciphertext whose key is known, as in the paper's experiments. The model is scored against the **key reference**: for each symbol, the plaintext unit the key gives it (the transcription decoded with the key). The key reference needs no human decryption, so it tests whether the model reproduces the key, not whether the key and transcription are right; to compare with a human decryption, add `--reference-plaintext` (below). The command reports:
 - support-weighted F1 (as in the paper), accuracy and macro F1, with 95% confidence intervals from a line-level bootstrap;
+- symbols that are not in the key count as errors, since the model cannot give them the key's reading; when there are any, the same F1 (with its confidence interval), accuracy and share of fully correct lines are also given **without** them, on a second line;
 - the share of lines fully correct and at least 95% correct;
 - the units with the most errors, and what they were read as.
 
-It writes a `.json` and `.txt` summary, a per-unit table and a per-line table.
+It writes a `.json` and `.txt` summary, a per-unit table and a per-line table (columns `key_reference` and `predicted`, one unit per symbol, separated by `|`).
 
-**Digit models.** Give a transcription with the **codes separated by spaces**, as in an archive decryption (e.g. `12^. 1 5 62^. 71 00`). The reference is the key's reading of each code; the model reads the same digits with the spaces removed, so it has to find the codes itself. Two readings are scored, per digit (a code's first digit carries the unit, the others the label `<JOIN>`): *model* (the model's own labels) and *model + key* (the split into key codes that the model finds most likely, which is what keybridge outputs). Besides F1 and accuracy, the command reports split accuracy, the share of codes read fully right, accuracy on "hard spots" (digits where a code could also be read as shorter codes), and the character error rate of the reading. Codes that are not in the key (e.g. `?`) are not scored. It also writes a per-digit table.
+**Digit models.** Give a transcription with the **codes separated by spaces**, as in an archive decryption (e.g. `12^. 1 5 62^. 71 00`). The key reference is the key's reading of each code; the model reads the same digits with the spaces removed, so it has to find the codes itself. Two readings are scored, per digit (a code's first digit carries the unit, the others the label `<JOIN>`): *model* (the model's own labels) and *model + key* (the split into key codes that the model finds most likely, which is what keybridge outputs). Besides F1 and accuracy, the command reports split accuracy, the share of codes read fully right, accuracy on "hard spots" (digits where a code could also be read as shorter codes), and the character error rate of the reading. Codes that are not in the key (e.g. `?`) are not scored. It also writes a per-digit table.
 
 | Option | Meaning |
 |--------|---------|
-| `--reference-plaintext archive_pt.txt` | Also compare the reference with the archive's own plaintext transcription (one line per ciphertext line, same order), and report how much they differ (see below). |
-| `--key full_key.tsv` | Derive the reference from this key instead of the one stored in the model. Use the *true* key here to score a model on a ciphertext written with a different key. |
-| `--exclude-unknown` | Do not score symbols that are not in the key (by default they count as errors). |
+| `--reference-plaintext archive_pt.txt` | Also compare the key reference and the model's reading with the archive's own (human) plaintext transcription (one line per ciphertext line, same order), and report how much they differ (see below). |
+| `--key full_key.tsv` | Derive the key reference from this key instead of the one stored in the model. Use the *true* key here to score a model on a ciphertext written with a different key. |
+| `--exclude-unknown` | Do not score symbols that are not in the key (by default they count as errors, and the scores without them are shown on a second line). |
 | `--exclude-units "MASTER,LODGE"` | Do not score these plaintext units, e.g. nomenclature absent from training. |
 | `--bootstrap 1000` | Number of resamples for the confidence intervals (`0` for none). |
 | `--custom-edits my_edits.py` | Normalise the transcription first, e.g. a project's transcription conventions. |
@@ -104,7 +106,7 @@ Scores are per cipher symbol, with one plaintext unit per symbol. A nomenclature
 
 **Polyphones.** When a reading or reference has several options (`[REY|REG]`), the command also reports an *option-aware* accuracy: a symbol counts as right when the two share an option. Against `--reference-plaintext`, option-aware character error rates use, for each such unit, the option that fits the archive line best (or the unit as written, when the archive itself lists the options, e.g. `altra/altro`). For digit models, `<JOIN>` labels must still match exactly.
 
-**Checking the reference.** The reference is the key's reading of the transcription, which can differ from the archive's published plaintext: through spelling normalisation, transcription choices, or errors in the key or transcription. With `--reference-plaintext`, both the reference and the model's reading are compared line by line with the archive plaintext. The command reports:
+**Checking the key reference.** The key reference is the key's reading of the transcription, which can differ from the archive's published plaintext: through spelling normalisation, transcription choices, or errors in the key or transcription. With `--reference-plaintext`, both the key reference and the model's reading are compared line by line with the archive plaintext. The command reports:
 - the character error rate (edit distance divided by the length of the archive text);
 - the share of identical lines;
 

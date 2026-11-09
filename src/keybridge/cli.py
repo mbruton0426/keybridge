@@ -81,7 +81,7 @@ def cmd_train(a):
         model, ck = load_model(model_path)
         lines = read_transcription(a.transcription, fmt, a.skip.split(","), line_edit, a.length)
         readings = read_lines(model, ck, lines, a.use_separators)
-        write_reading(out_dir, name, readings, fmt, f"Decipherment of {os.path.basename(a.transcription)}",
+        write_reading(out_dir, name, readings, fmt, f"Draft decryption of {os.path.basename(a.transcription)}",
                       checkpoint=ck)
         preview(readings)
         describe_fit(fit_figures(readings, ck))
@@ -109,7 +109,7 @@ def cmd_read(a):
     readings = read_lines(model, ck, lines, a.use_separators)
     name = safe_name(os.path.splitext(os.path.basename(a.transcription))[0])
     files = write_reading(a.out, name, readings, fmt,
-                          f"Decipherment of {os.path.basename(a.transcription)} with {os.path.basename(path)}",
+                          f"Draft decryption of {os.path.basename(a.transcription)} with {os.path.basename(path)}",
                           checkpoint=ck)
     print(f"Read {len(readings)} lines:\n")
     preview(readings)
@@ -142,7 +142,8 @@ def cmd_scan(a):
     print()
     describe_ranking(results, top)
     name = safe_name(os.path.splitext(os.path.basename(a.transcription))[0])
-    all_files, _ = write_scan_outputs(a.out, name, results, top, os.path.basename(a.transcription), a.all_outputs)
+    all_files, _ = write_scan_outputs(a.out, name, results, top, os.path.basename(a.transcription), a.all_outputs,
+                                      a.write_top)
     print("\nWritten:", *all_files, sep="\n  ")
 
 
@@ -164,7 +165,7 @@ def cmd_evaluate(a):
         fmt = resolve_format("space")
     else:
         fmt = resolve_format(a.format) if a.format else ck["settings"].get("symbol_format")
-    gold_key = load_key(a.key) if a.key else None
+    reference_key = load_key(a.key) if a.key else None
     _, line_edit = _load_custom_edits(a.custom_edits)
     lines = read_transcription(a.transcription, fmt, a.skip.split(","), line_edit,
                                None if digit else ck["settings"].get("sequence_length"))
@@ -175,11 +176,11 @@ def cmd_evaluate(a):
         if a.exclude_unknown:
             print("Note: for digit models, codes that are not in the key are never scored, so --exclude-unknown "
                   "changes nothing.")
-        result, units, details, readings = evaluate_digits(model, ck, lines, gold_key, exclude, a.bootstrap, a.seed)
+        result, units, details, readings = evaluate_digits(model, ck, lines, reference_key, exclude, a.bootstrap, a.seed)
         describe_digits(result, units)
         files = write_digit_evaluation(a.out, name, result, units, details)
     else:
-        result, units, per_line, readings = evaluate(model, ck, lines, gold_key, a.exclude_unknown, exclude,
+        result, units, per_line, readings = evaluate(model, ck, lines, reference_key, a.exclude_unknown, exclude,
                                                      a.bootstrap, a.seed)
         describe(result, units)
         files = write_evaluation(a.out, name, result, units, per_line, readings)
@@ -188,7 +189,7 @@ def cmd_evaluate(a):
                                write_reference_check)
         from .keys import CipherKey
         ref_lines = read_reference_plaintext(a.reference_plaintext, a.skip.split(","))
-        summary, rows = reference_check(readings, gold_key or CipherKey.from_json(ck["key"]), ref_lines)
+        summary, rows = reference_check(readings, reference_key or CipherKey.from_json(ck["key"]), ref_lines)
         describe_reference_check(summary)
         files += write_reference_check(a.out, name, summary, rows)
     print("\nWritten:", *files, sep="\n  ")
@@ -314,7 +315,9 @@ def main(argv=None):
             r.add_argument("--margin", type=float, default=0.05)
             r.add_argument("--max-close", type=int, default=3)
             r.add_argument("--max-length", type=int, default=50, help="longer lines are read in pieces")
-            r.add_argument("--all-outputs", action="store_true", help="write decipherments for every model")
+            r.add_argument("--all-outputs", action="store_true", help="write draft decryptions for every model")
+            r.add_argument("--write-top", type=int, default=10,
+                           help="write draft decryptions for this many of the best-ranked models (default 10)")
 
     ev = sub.add_parser("evaluate", help="(research) score a model's reading against the key")
     ev.add_argument("--model", required=True, help="model file (.pt) or model ID from the collection")
@@ -363,4 +366,3 @@ def main(argv=None):
     except StopHere as e:
         print(str(e), file=sys.stderr)
         sys.exit(2)
-

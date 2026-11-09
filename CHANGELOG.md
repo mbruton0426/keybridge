@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.0
+
+- **Scan score.** Models are now ranked by coverage × plausibility × repetition. The new *repetition* figure (letter
+  entropy of the output ÷ 3.8 bits, at most 1; outputs under 20 letters get 1) lowers repetitive output such as
+  `EEEFEFDE…`, which the letter statistics could mistake for a real language. The model's own certainty ("fit") is
+  no longer part of the score: its references come from synthetic text, and on real letters it could fall to 0 even
+  for the right key. It is still listed in the ranking CSV as `fit_diagnostic`, and used in plausibility's place only
+  when no language profiles are installed. On 312 letters with known keys, the true key is now ranked first for 83%
+  of letters and among the first three for 90% (1.2.0: 59% and 72%).
+- **More drafts.** `keybridge scan` writes draft decryptions for the 10 best-ranked models by default
+  (`--write-top N`; `--all-outputs` still writes every model), because the right key is not always ranked first. The
+  scan notebook has a matching *Drafts to write* setting, and the downloaded top results include these drafts.
+- **Wording.** Outputs, notebooks and documentation say *decryption* (reading a ciphertext with a known key) instead
+  of *decipherment*. Output files are now `…_decryption.txt` and `…_decryption_aligned.csv`. Models trained with
+  earlier versions load unchanged.
+- **Evaluation: key reference.** `keybridge evaluate` calls what it scores against the *key reference* (the
+  transcription read through the key), to keep it apart from a human decryption, which `--reference-plaintext`
+  compares with. The per-line table's column `gold` is now `key_reference`.
+- **Evaluation: symbols not in the key.** For symbol keys, symbols that are not in the key still count as errors, and
+  the report now adds a second line with F1 (and its confidence interval), accuracy and fully correct lines without
+  them (also in the JSON summary, as `in_key`). For digit keys they were never scored, as before.
+- **Docs.** The transcription format says that codes of several characters (e.g. `z19`) must be written whole, not
+  character by character.
+
 ## 1.2.0
 
 **Training data are made with ChronoFidelius.** All synthetic training ciphertext is now enciphered by [ChronoFidelius](https://pypi.org/project/ChronoFidelius/) (1.3.0 or later, installed automatically), the library used to build the HistCiph data. The key is turned into a ChronoFidelius encryption dictionary on the fly; the key format does not change.

@@ -28,7 +28,7 @@ def install_cell(extra=False):
     optuna_block = OPTUNA_BLOCK if extra else ""
     return code(f'''
 #@title ② Prepare the notebook (no need to open)  {{ display-mode: "form" }}
-# Installs the decipherment package from GitHub. To test before the repository exists,
+# Installs keybridge from GitHub. To test before the repository exists,
 # upload the repository folder to Colab and set INSTALL_FROM to its path, e.g. "/content/my_repo".
 INSTALL_FROM = "{INSTALL_FROM}"
 
@@ -76,7 +76,7 @@ def save(name, cells):
 # Notebook 1: train a model for your own key
 # =============================================================================
 nb1 = [md(f"""
-# ① Train a decipherment model for your own cipher key
+# ① Train a decryption model for your own cipher key
 
 This notebook teaches a small neural network the key of a **substitution cipher** (simple or homophonic) you already know,
 and can then use it to read ciphertexts that may have been written with that key.
@@ -136,7 +136,7 @@ SEARCH_TRIALS = 20  #@param {type:"integer"}
 DIGIT_MODE = "auto"  #@param ["auto", "on", "off"]
 
 #@markdown ### Ciphertext to read
-DECIPHER_A_TRANSCRIPTION = True  #@param {type:"boolean"}
+DECRYPT_A_TRANSCRIPTION = True  #@param {type:"boolean"}
 TRANSCRIPTION_FILE = ""  #@param {type:"string"}
 SKIP_LINES_STARTING_WITH = "##"  #@param {type:"string"}
 #@markdown Digit keys only: treat spaces in the transcription as code boundaries (by default they are ignored and the model finds the codes).
@@ -199,7 +199,7 @@ if PLAINTEXT_SOURCE.startswith("Upload") and custom_plaintext_documents() is Non
     plaintext_paths = find_or_upload(PLAINTEXT_FILE, "plaintext file(s) (.txt)", UPLOAD_DIR, multiple=True)
     print("Plaintext files:", ", ".join(os.path.basename(p) for p in plaintext_paths))
 transcription_path = None
-if DECIPHER_A_TRANSCRIPTION:
+if DECRYPT_A_TRANSCRIPTION:
     transcription_path = find_or_upload(TRANSCRIPTION_FILE, "transcription (.txt)", UPLOAD_DIR)
     print("Transcription:", os.path.basename(transcription_path))
 '''),
@@ -259,7 +259,7 @@ code(r'''
 from keybridge.pipeline import checkpoint_like, read_lines, write_reading, preview, fit_figures, describe_fit
 from keybridge.transcription import read_transcription, parse_skip_prefixes
 reading_files = []
-if not DECIPHER_A_TRANSCRIPTION:
+if not DECRYPT_A_TRANSCRIPTION:
     print("Skipped (no transcription requested in step ①).")
 else:
     lines = read_transcription(transcription_path, TRANSCRIPTION_FORMAT, parse_skip_prefixes(SKIP_LINES_STARTING_WITH),
@@ -267,7 +267,7 @@ else:
     ck = checkpoint_like(key, data, result, settings)
     readings = read_lines(result["model"], ck, lines, USE_SPACES_AS_CODE_BOUNDARIES)
     reading_files = write_reading(OUT_DIR, SAFE_NAME, readings, TRANSCRIPTION_FORMAT,
-                                  f"Decipherment of {os.path.basename(transcription_path)} with model '{SAFE_NAME}'",
+                                  f"Draft decryption of {os.path.basename(transcription_path)} with model '{SAFE_NAME}'",
                                   checkpoint=ck)
     print(f"Read {len(readings)} lines. First lines:\n")
     preview(readings)
@@ -317,7 +317,7 @@ else:
 - Licence: CC BY 4.0
 
 The contributor confirmed that they have the right to share this key and a model trained on it.
-No transcriptions or decipherments are included.
+No transcriptions or decryptions are included.
 """)
     if SHARE_METHOD.startswith("Hugging Face"):
         if "HF_MODEL_REPO" in config.HF_MODEL_REPO:
@@ -363,7 +363,7 @@ For each model it reports:
 - which language the decoded text reads most like.
 
 The best result, or the best few if their scores are close, is downloaded automatically.
-**Always read the outputs yourself:** the scores are a rough guide that has not yet been validated.
+**Always read the outputs yourself:** the ranking only suggests which drafts to read first. Drafts are written for the ten best-ranked models.
 
 Your transcription must follow the [transcription format]({GUIDE_URL}/TRANSCRIPTION_FORMAT.md): one manuscript
 line per line, the cipher symbols separated by spaces and written exactly as in the keys, and a blank
@@ -407,7 +407,9 @@ MIN_SYMBOL_COVERAGE = 0.75  #@param {type:"slider", min:0, max:1, step:0.05}
 
 #@markdown ### Results
 AUTO_DOWNLOAD_TOP_RESULTS = True  #@param {type:"boolean"}
-WRITE_DECIPHERMENTS_FOR_ALL_MODELS = False  #@param {type:"boolean"}
+#@markdown Draft decryptions are written for this many of the best-ranked models (the right key is not always first).
+DRAFTS_TO_WRITE = 10  #@param {type:"slider", min:1, max:34, step:1}
+WRITE_DECRYPTIONS_FOR_ALL_MODELS = False  #@param {type:"boolean"}
 SAVE_TO_GOOGLE_DRIVE = False  #@param {type:"boolean"}
 #@markdown *Advanced:* another model collection (Hugging Face repository or folder). Empty means the shared collection.
 MODEL_COLLECTION = ""  #@param {type:"string"}
@@ -484,7 +486,7 @@ from keybridge.scan import write_scan_outputs
 SAFE_NAME = safe_name(os.path.splitext(os.path.basename(transcription_path))[0])
 OUT_DIR = os.path.join(WORK, "outputs", f"scan_{SAFE_NAME}")
 all_files, top_files = write_scan_outputs(OUT_DIR, SAFE_NAME, results, top, os.path.basename(transcription_path),
-                                          WRITE_DECIPHERMENTS_FOR_ALL_MODELS)
+                                          WRITE_DECRYPTIONS_FOR_ALL_MODELS, DRAFTS_TO_WRITE)
 print("Saved:", *[os.path.basename(f) for f in all_files], sep="\n  ")
 all_zip = zip_files(all_files, os.path.join(WORK, f"scan_{SAFE_NAME}_all_results.zip"), f"scan_{SAFE_NAME}")
 if SAVE_TO_GOOGLE_DRIVE:
